@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Trace">
+<meta name="theme-color" content="#F7D5E4">
+<title>Pony Trace</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  #title{align-items:center;justify-content:center;gap:16px;text-align:center;overflow-y:auto}
+  #hero{width:min(170px,40vw)}
+
+  .stage{flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-height:0}
+  #pad{
+    height:100%;max-height:100%;aspect-ratio:1/1;max-width:100%;
+    touch-action:none;cursor:crosshair;
+    filter:drop-shadow(0 6px 0 #00000012);
+  }
+
+  .ghost{fill:none;stroke:var(--ghost);stroke-width:11;stroke-linecap:round;stroke-linejoin:round}
+  .ink{fill:none;stroke:var(--ink);stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+  .startdot{fill:#2FA36B;animation:beat 1.1s ease-in-out infinite alternate}
+  @keyframes beat{to{r:6.4}}
+  .demodot{fill:var(--rule-base)}
+
+  .stepdots{display:flex;gap:6px;align-items:center;justify-content:center}
+  .stepdots i{width:10px;height:10px;border-radius:50%;background:#FFFFFF9E;display:block}
+  .stepdots i.on{background:var(--plum)}
+  .stepdots i.now{background:var(--rule-base);transform:scale(1.35)}
+</style>
+</head>
+<body>
+
+<!-- ================= TITLE ================= -->
+<section class="screen on" id="title">
+  <div id="hero"></div>
+  <h1 class="title">Pony <em>Trace</em></h1>
+  <p class="sub">Start on the green dot and follow the letter with your finger.</p>
+
+  <div class="setting">
+    <label>She traces</label>
+    <div class="pillset" role="group">
+      <button id="cLower" aria-pressed="true"><span class="g">a</span>little</button>
+      <button id="cUpper" aria-pressed="false"><span class="g">A</span>BIG</button>
+      <button id="cBoth"  aria-pressed="false"><span class="g">Aa</span>both</button>
+    </div>
+  </div>
+
+  <div class="voicerow">
+    <select class="voices"></select>
+    <button class="tinybtn" id="tryVoice">Hear it</button>
+  </div>
+
+  <button class="bigbtn" id="start">Play</button>
+  <a class="tinybtn" href="index.html" style="text-decoration:none">All games</a>
+</section>
+
+<!-- ================= GAME ================= -->
+<section class="screen" id="game">
+  <div class="meadow" id="meadow"></div>
+
+  <div class="gamebar">
+    <button class="tinybtn" id="showme">Show me</button>
+    <div class="spacer"></div>
+    <button class="speaker" id="say">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
+        <path d="M17 8.5a5 5 0 010 7M20 6a9 9 0 010 12"/>
+      </svg>
+      <span id="sayText">Little b</span>
+    </button>
+    <div class="spacer"></div>
+    <button class="iconbtn" id="quit" aria-label="Back to start">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="stage">
+    <svg id="pad" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+
+  <div class="stepdots" id="steps" style="margin-top:10px"></div>
+</section>
+
+<!-- ================= DONE ================= -->
+<section class="screen donewrap" id="done">
+  <h2 id="doneTitle">The meadow is full!</h2>
+  <div class="bigmeadow" id="doneMeadow"></div>
+  <p class="note" id="doneNote"></p>
+  <button class="bigbtn" id="again">Trace again</button>
+  <a class="tinybtn" href="index.html" style="text-decoration:none">All games</a>
+</section>
+
+<script src="shared.js"></script>
+<script>
+"use strict";
+
+const LETTERS_PER_GAME = 8;
+
+// How forgiving the tracing is, in the letter's own 100-unit box.
+// TOL is how close to the line she must be to make progress. BREAK
+// is how far from the letter entirely she must get before the
+// stroke lets go. WINDOW is measured in units of the letter, not
+// in samples, so a fast confident stroke isn't punished on a long
+// letter -- and JUMP, the furthest a real finger travels between
+// two events, is what actually caps skipping ahead.
+const SAMPLES = 90;
+const TOL     = 9;
+const BREAK   = 20;
+const WINDOW  = 30;
+const JUMP    = 25;
+
+const $ = s => document.querySelector(s);
+const pad = $("#pad"), meadowEl = $("#meadow"), stepsEl = $("#steps");
+
+let caseMode = "lower";
+let queue = [], done = 0, glyph = null;
+let strokes = [], strokeIdx = 0;
+let samples = [], strokeLen = 0, winSamples = 12, progress = 0, tracing = false, lastPt = null, cleanLetters = 0, hintUsed = false;
+let ghostEls = [], inkEls = [], lens = [];
+
+/* ---------- geometry helpers ---------- */
+// Walk a path with getPointAtLength so we have real coordinates to
+// hit-test against, and so progress can be measured in arc length
+// rather than guessed from the pointer.
+function samplePath(d){
+  const p = document.createElementNS("http://www.w3.org/2000/svg","path");
+  p.setAttribute("d", d);
+  pad.appendChild(p);
+  const len = p.getTotalLength();
+  const pts = [];
+  for(let i=0;i<SAMPLES;i++){
+    const pt = p.getPointAtLength(len * i / (SAMPLES-1));
+    pts.push({x:pt.x, y:pt.y});
+  }
+  pad.removeChild(p);
+  return {pts, len};
+}
+
+function toSvg(e){
+  const pt = pad.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  return pt.matrixTransform(pad.getScreenCTM().inverse());
+}
+const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+
+/* ---------- rendering ---------- */
+function renderLetter(){
+  strokes = PG.STROKES[glyph] || [];
+  strokeIdx = 0;
+
+  const ghosts = strokes.map((d,i)=>`<path class="ghost" data-i="${i}" d="${d}"/>`).join("");
+  const inks   = strokes.map((d,i)=>`<path class="ink" data-i="${i}" d="${d}"/>`).join("");
+
+  pad.innerHTML = `
+    <rect class="card" x="1.5" y="1.5" width="97" height="97" rx="13"/>
+    ${PG.ruling()}
+    <g id="ghosts">${ghosts}</g>
+    <g id="inks">${inks}</g>
+    <circle class="demodot" id="demodot" r="5" cx="-50" cy="-50" opacity="0"/>
+    <circle class="startdot" id="startdot" r="5.4" cx="-50" cy="-50"/>`;
+
+  ghostEls = [...pad.querySelectorAll(".ghost")];
+  inkEls   = [...pad.querySelectorAll(".ink")];
+  lens     = inkEls.map(el => el.getTotalLength());
+
+  // Every ink path starts hidden; each is revealed by dashoffset as
+  // she traces it, and left at full for strokes already finished.
+  inkEls.forEach((el,i) => {
+    el.style.strokeDasharray  = lens[i];
+    el.style.strokeDashoffset = lens[i];
+  });
+
+  loadStroke();
+  drawSteps();
+}
+
+function loadStroke(){
+  const s = samplePath(strokes[strokeIdx]);
+  samples = s.pts;
+  strokeLen = s.len;
+  // WINDOW is in letter units; convert to samples for this stroke,
+  // then cap it. Short strokes are shorter than WINDOW, and without
+  // the cap the window would span the whole path -- one touch near
+  // the far end would finish the letter without drawing it.
+  const step = strokeLen / (SAMPLES - 1) || 1;
+  winSamples = Math.max(4, Math.min(Math.ceil(WINDOW / step), Math.floor(SAMPLES * 0.16)));
+  progress = 0;
+  lastPt = null;
+  const dot = $("#startdot");
+  dot.setAttribute("cx", samples[0].x);
+  dot.setAttribute("cy", samples[0].y);
+  dot.style.display = "";
+  paint();
+  drawSteps();
+}
+
+function paint(){
+  const el = inkEls[strokeIdx];
+  if(!el) return;
+  const frac = progress / (SAMPLES-1);
+  el.style.strokeDashoffset = lens[strokeIdx] * (1 - frac);
+}
+
+function drawSteps(){
+  stepsEl.innerHTML = strokes.map((_,i) =>
+    `<i class="${i < strokeIdx ? "on" : i === strokeIdx ? "now" : ""}"></i>`).join("");
+}
+
+/* ---------- tracing ---------- */
+// A stroke is one continuous movement of the pen. That's not a
+// rule invented for the game -- it's what a stroke is -- and
+// enforcing it is also what stops the letter being filled in by
+// poking at it, since progress can never be accumulated across
+// separate touches.
+pad.addEventListener("pointerdown", e => {
+  if(!samples.length) return;
+  const p = toSvg(e);
+  if(dist(p, samples[0]) > TOL * 1.4) return;
+
+  // The dots on i and j are a couple of units long -- there's
+  // nothing to drag along, so a tap in the right place finishes
+  // them. Without this they stall, since only movement advances.
+  if(strokeLen < 8){ completeStroke(); return; }
+
+  progress = 0;
+  paint();
+  tracing = true;
+  lastPt = p;
+  pad.setPointerCapture(e.pointerId);
+  $("#startdot").style.display = "none";
+});
+
+pad.addEventListener("pointermove", e => {
+  if(!tracing) return;
+  e.preventDefault();
+  const p = toSvg(e);
+
+  // A finger drags, it doesn't teleport. Anything landing far from
+  // the last point isn't part of one continuous stroke.
+  if(lastPt && dist(p, lastPt) > JUMP){ resetStroke(); return; }
+  lastPt = p;
+
+  // Off the letter entirely? That's a break. Measured against the
+  // whole stroke, not just the bit she's expected to be on, so
+  // moving faster than expected reads as fast rather than as lost.
+  let nearest = Infinity;
+  for(let i = 0; i < SAMPLES; i++){
+    const dd = dist(p, samples[i]);
+    if(dd < nearest) nearest = dd;
+  }
+  if(nearest > BREAK){ resetStroke(); return; }
+
+  // Advance to the furthest point she's actually reached, capped
+  // to a window ahead so she can't jump the queue.
+  const cap = Math.min(progress + winSamples, SAMPLES - 1);
+  let best = progress;
+  for(let i = progress + 1; i <= cap; i++){
+    if(dist(p, samples[i]) <= TOL) best = i;
+  }
+  if(best > progress){ progress = best; paint(); }
+
+  if(progress >= SAMPLES - 3) completeStroke();
+}, {passive:false});
+
+// Lifting off or wandering away puts the stroke back to the start.
+// Strokes are a second or two long, so this costs her very little,
+// and the ink wiping back is clearer feedback than a silent stall.
+function resetStroke(){
+  tracing = false; lastPt = null;
+  if(!samples.length) return;
+  progress = 0;
+  paint();
+  const dot = $("#startdot");
+  dot.setAttribute("cx", samples[0].x);
+  dot.setAttribute("cy", samples[0].y);
+  dot.style.display = "";
+}
+pad.addEventListener("pointerup", resetStroke);
+pad.addEventListener("pointercancel", resetStroke);
+pad.addEventListener("pointerleave", resetStroke);
+
+function completeStroke(){
+  tracing = false;
+  progress = SAMPLES - 1;
+  paint();
+  $("#startdot").style.display = "none";
+  samples = [];
+
+  if(strokeIdx < strokes.length - 1){
+    PG.blip();
+    strokeIdx++;
+    drawSteps();
+    setTimeout(loadStroke, 220);
+    if(strokes.length > 1) PG.speak("Good. Next part.");
+  } else {
+    PG.ding();
+    done++;
+    if(!hintUsed) cleanLetters++;
+    PG.fillMeadow(meadowEl, LETTERS_PER_GAME, done);
+    drawSteps();
+    PG.speak("Yes! " + PG.named(glyph) + ".",
+      () => setTimeout(() => done >= LETTERS_PER_GAME ? finish() : nextLetter(), 260));
+  }
+}
+
+/* ---------- show me ---------- */
+// Runs a dot along the current stroke at writing speed. It draws
+// the ink as it goes, then wipes it, so she sees the direction
+// without getting the stroke for free.
+$("#showme").addEventListener("click", () => {
+  if(!samples.length || tracing) return;
+  hintUsed = true;
+  const dot = $("#demodot"), el = inkEls[strokeIdx], L = lens[strokeIdx];
+  dot.style.opacity = 1;
+  const t0 = performance.now(), dur = 1500;
+  (function step(now){
+    const k = Math.min(1, (now - t0) / dur);
+    const i = Math.round(k * (SAMPLES-1));
+    dot.setAttribute("cx", samples[i].x);
+    dot.setAttribute("cy", samples[i].y);
+    el.style.strokeDashoffset = L * (1 - k);
+    if(k < 1) requestAnimationFrame(step);
+    else setTimeout(() => { dot.style.opacity = 0; paint(); }, 320);
+  })(t0);
+});
+
+/* ---------- rounds ---------- */
+function nextLetter(){
+  glyph = queue[done];
+  hintUsed = false;
+  $("#sayText").textContent = (PG.isBig(glyph) ? "Big " : "Little ") + glyph;
+  renderLetter();
+  PG.speak("Let's write " + PG.named(glyph) + ".");
+}
+
+function buildQueue(){
+  const out = [];
+  while(out.length < LETTERS_PER_GAME){
+    for(const L of PG.shuffle(PG.POOL.slice())){
+      if(out.length >= LETTERS_PER_GAME) break;
+      const big = caseMode === "upper" || (caseMode === "both" && Math.random() < 0.5);
+      out.push(PG.cased(L, big));
+    }
+  }
+  return out;
+}
+
+function newGame(){
+  queue = buildQueue();
+  done = 0; cleanLetters = 0;
+  PG.fillMeadow(meadowEl, LETTERS_PER_GAME, 0);
+  PG.showScreen("game");
+  nextLetter();
+}
+
+function finish(){
+  PG.fillMeadow($("#doneMeadow"), LETTERS_PER_GAME, LETTERS_PER_GAME);
+  const perfect = cleanLetters === LETTERS_PER_GAME;
+  $("#doneTitle").textContent = perfect ? "All on your own!" : "The meadow is full!";
+  $("#doneNote").textContent = perfect
+    ? "Eight letters, no peeking."
+    : cleanLetters + " of " + LETTERS_PER_GAME + " traced without a hint.";
+  PG.showScreen("done");
+  PG.cheer();
+  PG.speak(perfect ? "Wow! You wrote every letter by yourself." : "Nice writing. The meadow is full.");
+}
+
+/* ---------- settings ---------- */
+function setCase(c){
+  caseMode = c;
+  $("#cLower").setAttribute("aria-pressed", String(c === "lower"));
+  $("#cUpper").setAttribute("aria-pressed", String(c === "upper"));
+  $("#cBoth").setAttribute("aria-pressed",  String(c === "both"));
+  PG.store.set("case", c);
+}
+$("#cLower").addEventListener("click", () => setCase("lower"));
+$("#cUpper").addEventListener("click", () => setCase("upper"));
+$("#cBoth").addEventListener("click",  () => setCase("both"));
+setCase(PG.store.get("case") || "lower");
+
+PG.setTalkIndicator($("#say"));
+PG.wireVoicePicker(() => PG.speak("Let's write little bee."));
+$("#tryVoice").addEventListener("click", () => { PG.unlockAudio(); PG.speak("Let's write little bee."); });
+$("#say").addEventListener("click", () => { if(glyph) PG.speak("Let's write " + PG.named(glyph) + "."); });
+
+$("#start").addEventListener("click", () => { PG.unlockAudio(); PG.speak("Let's write some letters!", newGame); });
+$("#again").addEventListener("click", newGame);
+$("#quit").addEventListener("click", () => { speechSynthesis.cancel(); PG.showScreen("title"); });
+
+$("#hero").innerHTML = PG.ponySVG(4);
+PG.fillMeadow(meadowEl, LETTERS_PER_GAME, 0);
+PG.noDoubleTapZoom();
+</script>
+</body>
+</html>

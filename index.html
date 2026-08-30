@@ -8,552 +8,81 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Ponies">
 <meta name="theme-color" content="#F7D5E4">
-<title>Pony Letters</title>
+<title>Pony Games</title>
+<link rel="stylesheet" href="shared.css">
 <style>
-  :root{
-    --sky-top:#FBDCE9;
-    --sky-mid:#E7CDF2;
-    --sky-low:#D9C3F0;
-    --grass:#9FD9BE;
-    --grass-deep:#6FBF9E;
-    --paper:#FFFCF6;
-    --rule-base:#E4557E;
-    --rule-mid:#C9A7E8;
-    --ink:#3B2A44;
-    --plum:#7A4A80;
-    --plum-deep:#57315C;
-    --yes:#8FDCBB;
-    --no:#FFC49B;
-    --glyph:"Chalkboard SE","Avenir Next Rounded","Avenir Next","Trebuchet MS",sans-serif;
-    --ui:"Avenir Next","Trebuchet MS",system-ui,sans-serif;
+  body{overflow-y:auto}
+  .hub{
+    position:static;display:flex;flex-direction:column;align-items:center;
+    gap:22px;min-height:100%;justify-content:center;padding:34px 18px 44px;
+  }
+  #hero{width:min(150px,34vw)}
+  .hubtitle{font-family:var(--glyph);font-size:clamp(32px,7vw,58px);color:var(--plum-deep);font-weight:700;text-align:center;line-height:1.05}
+  .hubtitle em{font-style:normal;color:var(--rule-base)}
+
+  .cards{
+    display:grid;gap:16px;width:100%;max-width:760px;
+    grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+  }
+  .gamecard{
+    display:flex;align-items:center;gap:16px;text-decoration:none;
+    background:var(--paper);border-radius:22px;padding:18px 20px;
+    box-shadow:0 6px 0 #00000014;transition:transform .12s ease;
+  }
+  .gamecard:active{transform:translateY(4px);box-shadow:0 2px 0 #00000014}
+  .gamecard .art{width:82px;flex:0 0 auto}
+  .gamecard .art svg{width:100%;height:auto;display:block}
+  .gamecard h2{font-family:var(--glyph);font-size:24px;color:var(--plum-deep);margin-bottom:3px}
+  .gamecard p{font-size:14px;color:var(--plum);line-height:1.45}
+  .gamecard .tag{
+    display:inline-block;margin-top:7px;font-size:11px;font-weight:800;letter-spacing:.7px;
+    text-transform:uppercase;color:var(--rule-base);background:#FBE3EB;
+    padding:4px 10px;border-radius:999px;
   }
 
-  *{box-sizing:border-box;margin:0;padding:0}
+  .soon{opacity:.5}
+  .soon .tag{color:var(--plum);background:#EFE6F4}
 
-  html,body{
-    height:100%;overflow:hidden;overscroll-behavior:none;
-    font-family:var(--ui);color:var(--plum-deep);
-    -webkit-user-select:none;user-select:none;
-    -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;
-    touch-action:manipulation;
-  }
-  body{background:linear-gradient(180deg,var(--sky-top) 0%,var(--sky-mid) 52%,var(--sky-low) 100%)}
-
-  .screen{
-    position:absolute;inset:0;display:none;flex-direction:column;
-    padding:calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 12px);
-  }
-  .screen.on{display:flex}
-
-  /* ================= title ================= */
-  #title{align-items:center;justify-content:center;gap:16px;text-align:center;overflow-y:auto}
-  #hero{width:min(180px,42vw)}
-  #title h1{font-family:var(--glyph);font-size:clamp(30px,6.6vw,54px);color:var(--plum-deep);font-weight:700;line-height:1.05}
-  #title h1 em{font-style:normal;color:var(--rule-base)}
-  #title .sub{color:var(--plum);font-size:clamp(13px,2.1vw,17px);max-width:30ch;line-height:1.5}
-
-  .bigbtn{
-    font-family:var(--glyph);font-size:clamp(25px,4.2vw,36px);color:#fff;
-    background:var(--rule-base);border:none;border-radius:999px;padding:19px 56px;
-    box-shadow:0 7px 0 #B93C63;cursor:pointer;margin-top:4px;
-  }
-  .bigbtn:active{transform:translateY(5px);box-shadow:0 2px 0 #B93C63}
-
-  .setting{display:flex;flex-direction:column;align-items:center;gap:6px}
-  .setting > label{font-size:12px;font-weight:800;color:var(--plum);letter-spacing:1.2px;text-transform:uppercase}
-  .pillset{display:flex;gap:5px;background:#FFFFFF7A;padding:5px;border-radius:999px}
-  .pillset button{
-    font-family:var(--ui);font-size:clamp(13px,1.9vw,16px);font-weight:700;
-    color:var(--plum);background:transparent;border:none;padding:10px 20px;border-radius:999px;cursor:pointer;
-  }
-  .pillset button[aria-pressed="true"]{background:var(--plum);color:#fff}
-  .pillset button .g{font-family:var(--glyph);font-size:1.15em;margin-right:3px}
-
-  .voicerow{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:center}
-  #voices{
-    font-family:var(--ui);font-size:14px;font-weight:600;color:var(--plum-deep);
-    background:#FFFFFFC4;border:2px solid #fff;border-radius:999px;padding:10px 14px;max-width:210px;
-  }
-  .tinybtn{
-    font-family:var(--ui);font-size:14px;font-weight:700;color:var(--plum);
-    background:#FFFFFFC4;border:2px solid #fff;border-radius:999px;padding:10px 17px;cursor:pointer;
-  }
-  .tinybtn:active{background:#fff}
-
-  /* ================= meadow ================= */
-  .meadow{
-    flex:0 0 auto;position:relative;display:flex;align-items:flex-end;justify-content:center;
-    gap:clamp(2px,.8vw,8px);padding:0 8px 9px;margin-bottom:10px;
-  }
-  .meadow::after{
-    content:"";position:absolute;left:0;right:0;bottom:0;height:9px;
-    background:linear-gradient(180deg,var(--grass),var(--grass-deep));border-radius:6px;
-  }
-  .meadow svg{
-    width:clamp(26px,5.2vw,54px);height:auto;position:relative;z-index:1;
-    opacity:.24;filter:saturate(.15);transition:opacity .3s ease;
-  }
-  .meadow svg.here{opacity:1;filter:none;animation:hop .5s ease}
-  @keyframes hop{30%{transform:translateY(-16px) rotate(-6deg)}55%{transform:translateY(0)}75%{transform:translateY(-6px)}}
-
-  .gamebar{display:flex;align-items:center;gap:10px;flex:0 0 auto;margin-bottom:10px}
-  .gamebar .spacer{flex:1}
-  .iconbtn{
-    width:50px;height:50px;flex:0 0 auto;border:none;border-radius:50%;
-    background:#FFFFFF8F;color:var(--plum);display:grid;place-items:center;cursor:pointer;
-  }
-  .iconbtn svg{width:24px;height:24px}
-  .iconbtn:active{background:#fff}
-
-  .speaker{
-    display:flex;align-items:center;gap:14px;background:#fff;border:none;border-radius:999px;
-    padding:13px 30px 13px 20px;cursor:pointer;box-shadow:0 5px 0 #00000018;
-  }
-  .speaker:active{transform:translateY(3px);box-shadow:0 2px 0 #00000018}
-  .speaker svg{width:34px;height:34px;color:var(--rule-base)}
-  .speaker span{font-family:var(--glyph);font-size:clamp(19px,3.2vw,28px);color:var(--plum-deep);font-weight:700}
-  .speaker.talking svg{animation:pulse .55s ease-in-out infinite alternate}
-  @keyframes pulse{to{transform:scale(1.18)}}
-
-  /* ================= play ================= */
-  .play{flex:1 1 auto;display:flex;gap:14px;min-height:0}
-  @media (max-aspect-ratio:1/1){.play{flex-direction:column}}
-  #grid{flex:1 1 auto;display:grid;gap:13px;min-height:0;grid-template-columns:repeat(var(--cols),1fr)}
-
-  .tile{position:relative;border:none;padding:0;background:transparent;cursor:pointer;min-height:0;transition:transform .12s ease}
-  .tile svg{width:100%;height:100%;display:block}
-  .tile:active{transform:scale(.95)}
-
-  .card{fill:var(--paper)}
-  .glyph{font-family:var(--glyph);fill:var(--ink);font-weight:600}
-  .drawn{fill:none;stroke:var(--ink);stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
-  .baseline{stroke:var(--rule-base);stroke-width:2.6}
-  .midline{stroke:var(--rule-mid);stroke-width:2.2;stroke-dasharray:5 5}
-
-  .tile.right .card{fill:var(--yes)}
-  .tile.right{animation:pop .42s ease}
-  @keyframes pop{40%{transform:scale(1.1)}}
-  .tile.wrong .card{fill:var(--no)}
-  .tile.wrong{animation:shake .4s ease}
-  @keyframes shake{20%{transform:translateX(-9px)}45%{transform:translateX(9px)}70%{transform:translateX(-5px)}100%{transform:translateX(0)}}
-
-  /* ================= shelf ================= */
-  #shelf{flex:0 0 auto;display:flex;gap:9px;align-items:center;justify-content:center}
-  @media (min-aspect-ratio:1/1){#shelf{flex-direction:column;width:clamp(92px,12vw,144px)}}
-  @media (max-aspect-ratio:1/1){#shelf{height:clamp(84px,12vh,124px)}}
-  #shelf:empty{display:none}
-  .chip{display:flex;flex-direction:column;align-items:center;gap:3px;animation:land .32s ease}
-  @keyframes land{from{opacity:0;transform:translateY(-14px) scale(.8)}}
-  .chip svg{width:clamp(56px,7.6vw,84px);height:clamp(56px,7.6vw,84px);border-radius:12px}
-  .chip b{font-family:var(--ui);font-size:clamp(11px,1.5vw,14px);color:var(--plum);font-weight:800;letter-spacing:.4px}
-  .chip .card{fill:#F2E3D2}
-
-  /* ================= done ================= */
-  #done{align-items:center;justify-content:center;gap:16px;text-align:center;overflow-y:auto}
-  #done h2{font-family:var(--glyph);color:var(--plum-deep);font-size:clamp(30px,6vw,54px)}
-  #done .note{font-size:clamp(13px,2vw,16px);color:var(--plum);font-weight:600;max-width:34ch}
-  #doneMeadow{position:relative;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:center;gap:6px;padding:0 10px 12px;max-width:640px}
-  #doneMeadow::after{content:"";position:absolute;left:0;right:0;bottom:0;height:11px;background:linear-gradient(180deg,var(--grass),var(--grass-deep));border-radius:7px}
-  #doneMeadow svg{width:clamp(40px,8vw,74px);height:auto;position:relative;z-index:1}
-  #missed{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:520px}
-
-  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  .footnote{font-size:13px;color:var(--plum);text-align:center;max-width:44ch;line-height:1.55}
 </style>
 </head>
 <body>
-
-<!-- ================= TITLE ================= -->
-<section class="screen on" id="title">
+<main class="hub">
   <div id="hero"></div>
-  <h1>Pony <em>Letters</em></h1>
-  <p class="sub">Listen for the letter, then tap it. Every letter you find brings a pony to the meadow.</p>
+  <h1 class="hubtitle">Pony <em>Games</em></h1>
 
-  <div class="setting">
-    <label>She hears</label>
-    <div class="pillset" role="group">
-      <button id="mName" aria-pressed="true">Letter names</button>
-      <button id="mSound" aria-pressed="false">Letter sounds</button>
-    </div>
+  <div class="cards">
+    <a class="gamecard" href="letters.html">
+      <div class="art" id="a1"></div>
+      <div>
+        <h2>Pony Letters</h2>
+        <p>Hear a letter, find it on the board. Mixes in the letters that look alike on purpose.</p>
+        <span class="tag">Reading it</span>
+      </div>
+    </a>
+
+    <a class="gamecard" href="trace.html">
+      <div class="art" id="a2"></div>
+      <div>
+        <h2>Pony Trace</h2>
+        <p>Write the letter with your finger, starting on the green dot and following the right path.</p>
+        <span class="tag">Writing it</span>
+      </div>
+    </a>
   </div>
 
-  <div class="setting">
-    <label>She sees</label>
-    <div class="pillset" role="group">
-      <button id="cLower" aria-pressed="true"><span class="g">a</span>little</button>
-      <button id="cUpper" aria-pressed="false"><span class="g">A</span>BIG</button>
-      <button id="cBoth"  aria-pressed="false"><span class="g">Aa</span>both</button>
-    </div>
-  </div>
+  <p class="footnote">
+    Tip: for a much clearer voice, open Settings &rarr; Accessibility &rarr;
+    Spoken Content &rarr; Voices &rarr; English and download an Enhanced or
+    Premium voice. It shows up in each game's voice picker.
+  </p>
+</main>
 
-  <div class="voicerow">
-    <select id="voices"></select>
-    <button class="tinybtn" id="tryVoice">Hear it</button>
-  </div>
-
-  <button class="bigbtn" id="start">Play</button>
-</section>
-
-<!-- ================= GAME ================= -->
-<section class="screen" id="game">
-  <div class="meadow" id="meadow"></div>
-  <div class="gamebar">
-    <div class="spacer"></div>
-    <button class="speaker" id="say">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
-        <path d="M17 8.5a5 5 0 010 7M20 6a9 9 0 010 12"/>
-      </svg>
-      <span>Hear it again</span>
-    </button>
-    <div class="spacer"></div>
-    <button class="iconbtn" id="quit" aria-label="Back to start">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
-    </button>
-  </div>
-  <div class="play">
-    <div id="grid"></div>
-    <div id="shelf"></div>
-  </div>
-</section>
-
-<!-- ================= DONE ================= -->
-<section class="screen" id="done">
-  <h2 id="doneTitle">The meadow is full!</h2>
-  <div id="doneMeadow"></div>
-  <p class="note" id="doneNote"></p>
-  <div id="missed"></div>
-  <button class="bigbtn" id="again">Play again</button>
-</section>
-
+<script src="shared.js"></script>
 <script>
-"use strict";
-
-/* ================================================================
-   TUNE THESE
-   ================================================================ */
-const POOL   = ["b","d","p","q","g","j","i","y","w"];
-const ROUNDS = 12;
-
-// Letter names, spelled as real words so no voice has to improvise.
-const NAMES = {b:"bee", d:"dee", p:"pea", q:"cue", g:"gee",
-               j:"jay", i:"eye", y:"why", w:"double you"};
-
-// Sounds mode speaks these keywords, never a bare sound. Speech
-// engines spell out tokens they don't recognize ("guh" -> "G-U-H",
-// "kwuh" -> "K-W-U-H"), and real words are the only reliable way
-// around it. Each word must START with the letter's sound -- swap
-// them freely, just keep that rule.
-const KEYWORD = {b:"ball", d:"dog", p:"pig", q:"queen", g:"goat",
-                 j:"jam", i:"igloo", y:"yarn", w:"web"};
-
-// Who each letter gets mixed up with, per case. Lowercase is the
-// hard set (ball-and-stick reversals); uppercase confusions are
-// mostly about silhouette.
-const CONFUSE_LOWER = {
-  b:["d","p","q"], d:["b","q","p"], p:["q","b","d"], q:["p","d","b"],
-  g:["j","q","y"], j:["g","i","y"], i:["j","y","l"],
-  y:["w","j","i"], w:["y","i","j"]
-};
-const CONFUSE_UPPER = {
-  b:["d","p","g"], d:["b","p","q"], p:["b","d","q"], q:["g","d","p"],
-  g:["q","j","d"], j:["i","g","y"], i:["j","y","w"],
-  y:["w","j","i"], w:["y","i","j"]
-};
-
-// Pony coats: [body, mane, hoof/shadow]
-const COATS = [
-  ["#F7C6D9","#8E4C77","#E8A8C2"], ["#C9A7E8","#5E4A8E","#B18FD6"],
-  ["#A8DCD1","#2F7F6E","#8FCBBE"], ["#FFD9A0","#B9782E","#F0C287"],
-  ["#B9C7F0","#4A5C9E","#9EAEE0"], ["#F4A9C0","#A83C68","#E28FA9"],
-  ["#AEDCF0","#2D6E8E","#94C8E0"], ["#E8C4A0","#9A6738","#D4AC86"],
-  ["#E0BBE4","#7A3F8E","#CCA2D2"], ["#FFC1CC","#B04A62","#F0A7B5"],
-  ["#CDE8A8","#5B8E2F","#B5D68E"], ["#FFE0B5","#C08A3A","#F2CB99"]
-];
-
-/* ================================================================ */
-
-const $ = s => document.querySelector(s);
-const gridEl = $("#grid"), shelfEl = $("#shelf"), meadowEl = $("#meadow");
-
-let mode = "name";        // name | sound
-let caseMode = "lower";   // lower | upper | both
-let round = 0, target = null, locked = false, firstTry = true;
-let earned = 0, cleanRounds = 0, missedThisGame = [];
-
-const base  = g => g.toLowerCase();
-const isBig = g => g !== g.toLowerCase();
-
-/* ---------- storage ---------- */
-const mem = {};
-const store = {
-  get(k){ try{ return localStorage.getItem(k); }catch(e){ return mem[k] ?? null; } },
-  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){ mem[k]=v; } }
-};
-
-/* ---------- chimes ---------- */
-let ac = null;
-function tone(freq,start,dur,type,vol){
-  const o=ac.createOscillator(), g=ac.createGain();
-  o.type=type; o.frequency.setValueAtTime(freq,ac.currentTime+start);
-  g.gain.setValueAtTime(0.0001,ac.currentTime+start);
-  g.gain.exponentialRampToValueAtTime(vol,ac.currentTime+start+0.012);
-  g.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+start+dur);
-  o.connect(g); g.connect(ac.destination);
-  o.start(ac.currentTime+start); o.stop(ac.currentTime+start+dur+0.03);
-}
-const ding  = () => { if(ac){ tone(1046,0,.16,"sine",.28); tone(1568,.09,.32,"sine",.24);} };
-const buzz  = () => { if(ac){ tone(240,0,.18,"triangle",.16); tone(196,.09,.2,"triangle",.13);} };
-const cheer = () => { if(ac){ [784,988,1175,1568].forEach((f,i)=>tone(f,i*.11,.3,"sine",.22)); } };
-
-/* ---------- voices ---------- */
-const FEMALE_FIRST = ["Samantha","Ava","Allison","Susan","Zoe","Nicky",
-                      "Karen","Moira","Tessa","Fiona","Serena","Kate",
-                      "Google US English","Microsoft Aria","Microsoft Zira"];
-let voice = null, voiceList = [];
-
-function loadVoices(){
-  if(!window.speechSynthesis) return;
-  const all = speechSynthesis.getVoices();
-  if(!all.length) return;
-  voiceList = all.filter(v => !v.lang || v.lang.toLowerCase().startsWith("en"));
-  if(!voiceList.length) voiceList = all;
-  voiceList.sort((a,b) => {
-    const ra = FEMALE_FIRST.findIndex(n => a.name.startsWith(n));
-    const rb = FEMALE_FIRST.findIndex(n => b.name.startsWith(n));
-    return (ra < 0 ? 99 : ra) - (rb < 0 ? 99 : rb);
-  });
-  const sel = $("#voices");
-  sel.innerHTML = voiceList.map((v,i) => `<option value="${i}">${v.name}</option>`).join("");
-  const saved = voiceList.findIndex(v => v.name === store.get("voice"));
-  const idx = saved >= 0 ? saved : 0;
-  sel.value = String(idx);
-  voice = voiceList[idx];
-}
-if(window.speechSynthesis){
-  loadVoices();
-  speechSynthesis.addEventListener("voiceschanged", loadVoices);
-}
-$("#voices").addEventListener("change", e => {
-  voice = voiceList[+e.target.value];
-  if(voice) store.set("voice", voice.name);
-  speak(sample());
-});
-$("#tryVoice").addEventListener("click", () => { unlockAudio(); speak(sample()); });
-const sample = () => mode === "name"
-  ? "Find little gee. Find big Bee."
-  : "Find the one that starts goat.";
-
-function speak(text, then){
-  if(!window.speechSynthesis){ if(then) then(); return; }
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  if(voice) u.voice = voice;
-  u.rate = 0.9; u.pitch = 1.1; u.volume = 1;
-  u.lang = (voice && voice.lang) || "en-US";
-  const btn = $("#say");
-  btn.classList.add("talking");
-  // iOS Safari can fire both end and error for one utterance; run the
-  // callback once so newGame/buildRound never double up.
-  u.onend = u.onerror = () => {
-    btn.classList.remove("talking");
-    if(then){ const f = then; then = null; f(); }
-  };
-  speechSynthesis.speak(u);
-}
-
-/* ---------- what the voice says ---------- */
-const named  = g => (isBig(g) ? "big " : "little ") + NAMES[base(g)];
-const starts = g => "the one that starts " + KEYWORD[base(g)];
-
-const ask     = g => mode === "name" ? "Find " + named(g) + "." : "Find " + starts(g) + ".";
-const praise  = g => mode === "name" ? "Yes! " + named(g) + "."
-                                     : "Yes! " + NAMES[base(g)] + " is for " + KEYWORD[base(g)] + ".";
-const correct = (picked, want) => mode === "name"
-  ? "That one is " + named(picked) + ". Now find " + named(want) + "."
-  : "That one starts " + KEYWORD[base(picked)] + ". Now find " + starts(want) + ".";
-
-/* ---------- drawings ---------- */
-// Handwriting ruling: dashed midline y=48, baseline y=72. Glyph
-// baselines sit exactly on the line, so ascenders climb and
-// descenders hang -- that contrast is the whole lesson.
-
-// Lowercase g is drawn by hand rather than set in a font. System
-// fonts give you a double-story or looped-tail g, which is not the
-// form she is taught to read: a closed circle with a straight stem
-// down the right side, hooking left below the baseline.
-const DRAWN = {
-  g: `<circle class="drawn" cx="50" cy="58" r="14"/>
-      <path class="drawn" d="M64 44 V76 C64 82.5 58 86 51.5 83.5"/>`
-};
-
-function tileSVG(glyph, cardClass){
-  const body = DRAWN[glyph]
-    || `<text class="glyph" x="50" y="72" text-anchor="middle" font-size="54">${glyph}</text>`;
-  return `<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
-    <rect class="card ${cardClass||""}" x="1.5" y="1.5" width="97" height="97" rx="13"/>
-    <line class="midline"  x1="10" y1="48" x2="90" y2="48"/>
-    <line class="baseline" x1="10" y1="72" x2="90" y2="72"/>
-    ${body}
-  </svg>`;
-}
-
-function ponySVG(i, cls){
-  const [coat, mane, shade] = COATS[i % COATS.length];
-  return `<svg class="${cls||""}" viewBox="0 0 116 96" preserveAspectRatio="xMidYMax meet">
-    <path d="M20 46 C3 42 2 72 12 90 C17 74 20 62 31 59 Z" fill="${mane}"/>
-    <rect x="32" y="60" width="12" height="31" rx="6" fill="${shade}"/>
-    <rect x="70" y="60" width="12" height="31" rx="6" fill="${shade}"/>
-    <rect x="46" y="62" width="12" height="29" rx="6" fill="${coat}"/>
-    <rect x="84" y="62" width="12" height="29" rx="6" fill="${coat}"/>
-    <ellipse cx="58" cy="50" rx="34" ry="21" fill="${coat}"/>
-    <path d="M78 40 C79 27 85 17 94 14 L105 27 C96 32 89 42 87 52 Z" fill="${coat}"/>
-    <ellipse cx="97" cy="26" rx="16" ry="12.5" fill="${coat}"/>
-    <ellipse cx="108" cy="32" rx="7.5" ry="6" fill="${shade}"/>
-    <path d="M86 15 L88 3 L96 12 Z" fill="${coat}"/>
-    <path d="M76 34 C71 19 79 6 93 2 C86 11 85 23 89 32 Z" fill="${mane}"/>
-    <circle cx="100" cy="24" r="2.6" fill="#3B2A44"/>
-    <path d="M52 40 l2.6 5.4 5.9.8-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z" fill="${mane}" opacity=".5"/>
-  </svg>`;
-}
-
-/* ---------- rounds ---------- */
-const shuffle = a => { for(let i=a.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]];} return a; };
-const tileCount = () => round <= 4 ? 4 : round <= 8 ? 6 : 9;
-const cased = (letter, big) => big ? letter.toUpperCase() : letter;
-
-function drawMeadow(){
-  meadowEl.innerHTML = Array.from({length:ROUNDS},(_,i)=>ponySVG(i, i < earned ? "here" : "")).join("");
-}
-
-function buildRound(){
-  round++; locked = false; firstTry = true;
-  shelfEl.innerHTML = "";
-
-  const n = tileCount();
-  const big = caseMode === "upper" || (caseMode === "both" && Math.random() < 0.5);
-  const tLetter = POOL[(Math.random()*POOL.length)|0];
-  target = cased(tLetter, big);
-
-  const set = [target];
-
-  // In "both" + names, the target's other case is the sharpest
-  // distractor there is -- she has to hear "big" vs "little" to
-  // pick. In sounds mode it would be a second right answer, so it
-  // stays out.
-  if(caseMode === "both" && mode === "name") set.push(cased(tLetter, !big));
-
-  const table = big ? CONFUSE_UPPER : CONFUSE_LOWER;
-  for(const c of shuffle((table[tLetter]||[]).slice()))
-    if(set.length < n && POOL.includes(c)) set.push(cased(c, big));
-
-  for(const c of shuffle(POOL.slice())){
-    if(set.length >= n) break;
-    const mixBig = caseMode === "both" ? Math.random() < 0.5 : big;
-    const glyph = cased(c, mixBig);
-    if(!set.includes(glyph) && base(glyph) !== tLetter) set.push(glyph);
-  }
-  shuffle(set);
-
-  gridEl.style.setProperty("--cols", set.length <= 4 ? 2 : 3);
-  gridEl.innerHTML = set.map(g => `<button class="tile" data-g="${g}">${tileSVG(g)}</button>`).join("");
-
-  speak(ask(target));
-}
-
-/* ---------- answering ---------- */
-gridEl.addEventListener("click", e => {
-  const tile = e.target.closest(".tile");
-  if(!tile || locked) return;
-  const picked = tile.dataset.g;
-
-  // Sounds mode ignores case -- B and b say the same thing.
-  const right = mode === "sound" ? base(picked) === base(target) : picked === target;
-
-  if(right){
-    locked = true;
-    tile.classList.add("right");
-    earned++; if(firstTry) cleanRounds++;
-    drawMeadow(); ding();
-    speak(praise(picked), () => setTimeout(() => round >= ROUNDS ? finish() : buildRound(), 220));
-  } else {
-    firstTry = false;
-    tile.classList.add("wrong");
-    tile.setAttribute("disabled","");
-    buzz();
-    if(!missedThisGame.some(m => m.picked === picked && m.want === target))
-      missedThisGame.push({picked, want:target});
-    shelfEl.insertAdjacentHTML("beforeend",
-      `<div class="chip">${tileSVG(picked)}<b>${NAMES[base(picked)]}</b></div>`);
-    speak(correct(picked, target));
-  }
-});
-
-$("#say").addEventListener("click", () => { if(target) speak(ask(target)); });
-
-/* ---------- finish ---------- */
-function finish(){
-  $("#doneMeadow").innerHTML = Array.from({length:ROUNDS},(_,i)=>ponySVG(i)).join("");
-  const perfect = cleanRounds === ROUNDS;
-  $("#doneTitle").textContent = perfect ? "Every one, first try!" : "The meadow is full!";
-  $("#doneNote").textContent = perfect
-    ? "12 ponies, no wobbles."
-    : cleanRounds + " of " + ROUNDS + " on the first try. Still worth practicing:";
-  $("#missed").innerHTML = perfect ? "" :
-    [...new Set(missedThisGame.map(m => m.want))].slice(0,6)
-      .map(g => `<div class="chip">${tileSVG(g)}<b>${NAMES[base(g)]}</b></div>`).join("");
-  show("done"); cheer();
-  speak(perfect ? "Wow! You found every letter on the first try."
-                : "The meadow is full. Great job.");
-}
-
-/* ---------- screens ---------- */
-function show(id){ document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); }
-function newGame(){
-  round = 0; earned = 0; cleanRounds = 0; missedThisGame = [];
-  drawMeadow(); show("game"); buildRound();
-}
-
-/* ---------- settings ---------- */
-function setMode(m){
-  mode = m;
-  $("#mName").setAttribute("aria-pressed", String(m === "name"));
-  $("#mSound").setAttribute("aria-pressed", String(m === "sound"));
-  store.set("mode", m);
-}
-function setCase(c){
-  caseMode = c;
-  $("#cLower").setAttribute("aria-pressed", String(c === "lower"));
-  $("#cUpper").setAttribute("aria-pressed", String(c === "upper"));
-  $("#cBoth").setAttribute("aria-pressed",  String(c === "both"));
-  store.set("case", c);
-}
-$("#mName").addEventListener("click", () => setMode("name"));
-$("#mSound").addEventListener("click", () => setMode("sound"));
-$("#cLower").addEventListener("click", () => setCase("lower"));
-$("#cUpper").addEventListener("click", () => setCase("upper"));
-$("#cBoth").addEventListener("click",  () => setCase("both"));
-setMode(store.get("mode") || "name");
-setCase(store.get("case") || "lower");
-
-/* ---------- start (this tap unlocks iOS audio) ---------- */
-function unlockAudio(){
-  if(!ac){ try{ ac = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){} }
-  if(ac && ac.state === "suspended") ac.resume();
-  loadVoices();
-}
-$("#start").addEventListener("click", () => { unlockAudio(); speak("Let's find some letters!", newGame); });
-$("#again").addEventListener("click", newGame);
-$("#quit").addEventListener("click", () => { speechSynthesis.cancel(); show("title"); });
-
-$("#hero").innerHTML = ponySVG(1);
-drawMeadow();
-
-let lastTap = 0;
-document.addEventListener("touchend", e => {
-  const now = Date.now();
-  if(now - lastTap < 320) e.preventDefault();
-  lastTap = now;
-}, {passive:false});
+  document.getElementById("hero").innerHTML = PG.ponySVG(0);
+  document.getElementById("a1").innerHTML   = PG.ponySVG(1);
+  document.getElementById("a2").innerHTML   = PG.ponySVG(4);
 </script>
 </body>
 </html>

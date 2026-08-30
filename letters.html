@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Letters">
+<meta name="theme-color" content="#F7D5E4">
+<title>Pony Letters</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  #title{align-items:center;justify-content:center;gap:16px;text-align:center;overflow-y:auto}
+  #hero{width:min(170px,40vw)}
+
+  .play{flex:1 1 auto;display:flex;gap:14px;min-height:0}
+  @media (max-aspect-ratio:1/1){.play{flex-direction:column}}
+  #grid{flex:1 1 auto;display:grid;gap:13px;min-height:0;grid-template-columns:repeat(var(--cols),1fr)}
+
+  .tile{position:relative;border:none;padding:0;background:transparent;cursor:pointer;min-height:0;transition:transform .12s ease}
+  .tile svg{width:100%;height:100%;display:block}
+  .tile:active{transform:scale(.95)}
+
+  .tile.right .card{fill:var(--yes)}
+  .tile.right{animation:pop .42s ease}
+  @keyframes pop{40%{transform:scale(1.1)}}
+  .tile.wrong .card{fill:var(--no)}
+  .tile.wrong{animation:shake .4s ease}
+  @keyframes shake{20%{transform:translateX(-9px)}45%{transform:translateX(9px)}70%{transform:translateX(-5px)}100%{transform:translateX(0)}}
+
+  #shelf{flex:0 0 auto;display:flex;gap:9px;align-items:center;justify-content:center}
+  @media (min-aspect-ratio:1/1){#shelf{flex-direction:column;width:clamp(92px,12vw,144px)}}
+  @media (max-aspect-ratio:1/1){#shelf{height:clamp(84px,12vh,124px)}}
+  #shelf:empty{display:none}
+</style>
+</head>
+<body>
+
+<!-- ================= TITLE ================= -->
+<section class="screen on" id="title">
+  <div id="hero"></div>
+  <h1 class="title">Pony <em>Letters</em></h1>
+  <p class="sub">Listen for the letter, then tap it. Every letter you find brings a pony to the meadow.</p>
+
+  <div class="setting">
+    <label>She hears</label>
+    <div class="pillset" role="group">
+      <button id="mName" aria-pressed="true">Letter names</button>
+      <button id="mSound" aria-pressed="false">Letter sounds</button>
+    </div>
+  </div>
+
+  <div class="setting">
+    <label>She sees</label>
+    <div class="pillset" role="group">
+      <button id="cLower" aria-pressed="true"><span class="g">a</span>little</button>
+      <button id="cUpper" aria-pressed="false"><span class="g">A</span>BIG</button>
+      <button id="cBoth"  aria-pressed="false"><span class="g">Aa</span>both</button>
+    </div>
+  </div>
+
+  <div class="voicerow">
+    <select class="voices"></select>
+    <button class="tinybtn" id="tryVoice">Hear it</button>
+  </div>
+
+  <button class="bigbtn" id="start">Play</button>
+  <a class="tinybtn" href="index.html" style="text-decoration:none">All games</a>
+</section>
+
+<!-- ================= GAME ================= -->
+<section class="screen" id="game">
+  <div class="meadow" id="meadow"></div>
+  <div class="gamebar">
+    <div class="spacer"></div>
+    <button class="speaker" id="say">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
+        <path d="M17 8.5a5 5 0 010 7M20 6a9 9 0 010 12"/>
+      </svg>
+      <span>Hear it again</span>
+    </button>
+    <div class="spacer"></div>
+    <button class="iconbtn" id="quit" aria-label="Back to start">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="play">
+    <div id="grid"></div>
+    <div id="shelf"></div>
+  </div>
+</section>
+
+<!-- ================= DONE ================= -->
+<section class="screen donewrap" id="done">
+  <h2 id="doneTitle">The meadow is full!</h2>
+  <div class="bigmeadow" id="doneMeadow"></div>
+  <p class="note" id="doneNote"></p>
+  <div class="chiprow" id="missed"></div>
+  <button class="bigbtn" id="again">Play again</button>
+  <a class="tinybtn" href="index.html" style="text-decoration:none">All games</a>
+</section>
+
+<script src="shared.js"></script>
+<script>
+"use strict";
+
+const ROUNDS = 12;
+
+const $ = s => document.querySelector(s);
+const gridEl = $("#grid"), shelfEl = $("#shelf"), meadowEl = $("#meadow");
+
+let mode = "name";        // name | sound
+let caseMode = "lower";   // lower | upper | both
+let round = 0, target = null, locked = false, firstTry = true;
+let earned = 0, cleanRounds = 0, missed = [];
+
+/* ---------- what the voice says ---------- */
+const ask     = g => mode === "name" ? "Find " + PG.named(g) + "." : "Find " + PG.starts(g) + ".";
+const praise  = g => mode === "name"
+  ? "Yes! " + PG.named(g) + "."
+  : "Yes! " + PG.NAMES[PG.base(g)] + " is for " + PG.KEYWORD[PG.base(g)] + ".";
+const correct = (picked, want) => mode === "name"
+  ? "That one is " + PG.named(picked) + ". Now find " + PG.named(want) + "."
+  : "That one starts " + PG.KEYWORD[PG.base(picked)] + ". Now find " + PG.starts(want) + ".";
+
+/* ---------- rounds ---------- */
+const tileCount = () => round <= 4 ? 4 : round <= 8 ? 6 : 9;
+
+function buildRound(){
+  round++; locked = false; firstTry = true;
+  shelfEl.innerHTML = "";
+
+  const n = tileCount();
+  const big = caseMode === "upper" || (caseMode === "both" && Math.random() < 0.5);
+  const tLetter = PG.POOL[(Math.random()*PG.POOL.length)|0];
+  target = PG.cased(tLetter, big);
+
+  const set = [target];
+
+  // In "both" + names, the target's other case is the sharpest
+  // distractor there is -- she has to hear "big" vs "little" to
+  // pick. In sounds mode it would be a second right answer.
+  if(caseMode === "both" && mode === "name") set.push(PG.cased(tLetter, !big));
+
+  const table = big ? PG.CONFUSE_UPPER : PG.CONFUSE_LOWER;
+  for(const c of PG.shuffle((table[tLetter]||[]).slice()))
+    if(set.length < n && PG.POOL.includes(c)) set.push(PG.cased(c, big));
+
+  for(const c of PG.shuffle(PG.POOL.slice())){
+    if(set.length >= n) break;
+    const mixBig = caseMode === "both" ? Math.random() < 0.5 : big;
+    const g = PG.cased(c, mixBig);
+    if(!set.includes(g) && PG.base(g) !== tLetter) set.push(g);
+  }
+  PG.shuffle(set);
+
+  gridEl.style.setProperty("--cols", set.length <= 4 ? 2 : 3);
+  gridEl.innerHTML = set.map(g => `<button class="tile" data-g="${g}">${PG.tileSVG(g)}</button>`).join("");
+
+  PG.speak(ask(target));
+}
+
+/* ---------- answering ---------- */
+gridEl.addEventListener("click", e => {
+  const tile = e.target.closest(".tile");
+  if(!tile || locked) return;
+  const picked = tile.dataset.g;
+
+  // Sounds mode ignores case -- B and b say the same thing.
+  const right = mode === "sound" ? PG.base(picked) === PG.base(target) : picked === target;
+
+  if(right){
+    locked = true;
+    tile.classList.add("right");
+    earned++; if(firstTry) cleanRounds++;
+    PG.fillMeadow(meadowEl, ROUNDS, earned);
+    PG.ding();
+    PG.speak(praise(picked), () => setTimeout(() => round >= ROUNDS ? finish() : buildRound(), 220));
+  } else {
+    firstTry = false;
+    tile.classList.add("wrong");
+    tile.setAttribute("disabled","");
+    PG.buzz();
+    if(!missed.some(m => m.picked === picked && m.want === target))
+      missed.push({picked, want:target});
+    shelfEl.insertAdjacentHTML("beforeend",
+      `<div class="chip">${PG.tileSVG(picked)}<b>${PG.NAMES[PG.base(picked)]}</b></div>`);
+    PG.speak(correct(picked, target));
+  }
+});
+
+$("#say").addEventListener("click", () => { if(target) PG.speak(ask(target)); });
+
+/* ---------- finish ---------- */
+function finish(){
+  PG.fillMeadow($("#doneMeadow"), ROUNDS, ROUNDS);
+  const perfect = cleanRounds === ROUNDS;
+  $("#doneTitle").textContent = perfect ? "Every one, first try!" : "The meadow is full!";
+  $("#doneNote").textContent = perfect
+    ? "12 ponies, no wobbles."
+    : cleanRounds + " of " + ROUNDS + " on the first try. Still worth practicing:";
+  $("#missed").innerHTML = perfect ? "" :
+    [...new Set(missed.map(m => m.want))].slice(0,6)
+      .map(g => `<div class="chip">${PG.tileSVG(g)}<b>${PG.NAMES[PG.base(g)]}</b></div>`).join("");
+  PG.showScreen("done");
+  PG.cheer();
+  PG.speak(perfect ? "Wow! You found every letter on the first try."
+                   : "The meadow is full. Great job.");
+}
+
+function newGame(){
+  round = 0; earned = 0; cleanRounds = 0; missed = [];
+  PG.fillMeadow(meadowEl, ROUNDS, 0);
+  PG.showScreen("game");
+  buildRound();
+}
+
+/* ---------- settings ---------- */
+function setMode(m){
+  mode = m;
+  $("#mName").setAttribute("aria-pressed", String(m === "name"));
+  $("#mSound").setAttribute("aria-pressed", String(m === "sound"));
+  PG.store.set("mode", m);
+}
+function setCase(c){
+  caseMode = c;
+  $("#cLower").setAttribute("aria-pressed", String(c === "lower"));
+  $("#cUpper").setAttribute("aria-pressed", String(c === "upper"));
+  $("#cBoth").setAttribute("aria-pressed",  String(c === "both"));
+  PG.store.set("case", c);
+}
+$("#mName").addEventListener("click", () => setMode("name"));
+$("#mSound").addEventListener("click", () => setMode("sound"));
+$("#cLower").addEventListener("click", () => setCase("lower"));
+$("#cUpper").addEventListener("click", () => setCase("upper"));
+$("#cBoth").addEventListener("click",  () => setCase("both"));
+setMode(PG.store.get("mode") || "name");
+setCase(PG.store.get("case") || "lower");
+
+const sample = () => mode === "name" ? "Find little gee. Find big Bee."
+                                     : "Find the one that starts goat.";
+PG.setTalkIndicator($("#say"));
+PG.wireVoicePicker(() => PG.speak(sample()));
+$("#tryVoice").addEventListener("click", () => { PG.unlockAudio(); PG.speak(sample()); });
+
+$("#start").addEventListener("click", () => { PG.unlockAudio(); PG.speak("Let's find some letters!", newGame); });
+$("#again").addEventListener("click", newGame);
+$("#quit").addEventListener("click", () => { speechSynthesis.cancel(); PG.showScreen("title"); });
+
+$("#hero").innerHTML = PG.ponySVG(1);
+PG.fillMeadow(meadowEl, ROUNDS, 0);
+PG.noDoubleTapZoom();
+</script>
+</body>
+</html>

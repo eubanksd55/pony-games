@@ -352,7 +352,12 @@ function speak(text, then){
   u.lang = (voice && voice.lang) || "en-US";
   const btn = $("#say");
   btn.classList.add("talking");
-  u.onend = u.onerror = () => { btn.classList.remove("talking"); if(then) then(); };
+  // iOS Safari can fire both end and error for one utterance; run the
+  // callback once so newGame/buildRound never double up.
+  u.onend = u.onerror = () => {
+    btn.classList.remove("talking");
+    if(then){ const f = then; then = null; f(); }
+  };
   speechSynthesis.speak(u);
 }
 

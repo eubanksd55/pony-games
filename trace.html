@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Trace">
 <meta name="theme-color" content="#F7D5E4">
-<title>Pony Trace</title>
+<title data-word="trace">Pony Trace</title>
 <link rel="stylesheet" href="shared.css">
 <style>
   #title{align-items:center;justify-content:center;gap:16px;text-align:center;overflow-y:auto}
@@ -38,8 +38,8 @@
 <!-- ================= TITLE ================= -->
 <section class="screen on" id="title">
   <div id="hero"></div>
-  <h1 class="title">Pony <em>Trace</em></h1>
-  <p class="sub">Start on the green dot and follow the letter with your finger.</p>
+  <h1 class="title"><span data-word="name">Pony</span> <em>Trace</em></h1>
+  <p class="sub">Start on the green dot and follow the shape with your finger.</p>
 
   <div class="setting">
     <label>She traces</label>
@@ -48,6 +48,11 @@
       <button id="cUpper" aria-pressed="false"><span class="g">A</span>BIG</button>
       <button id="cBoth"  aria-pressed="false"><span class="g">Aa</span>both</button>
     </div>
+  </div>
+
+  <div class="setting" style="width:100%;max-width:520px">
+    <label>Working on</label>
+    <div id="picker"></div>
   </div>
 
   <div class="voicerow">
@@ -88,7 +93,7 @@
 
 <!-- ================= DONE ================= -->
 <section class="screen donewrap" id="done">
-  <h2 id="doneTitle">The meadow is full!</h2>
+  <h2 id="doneTitle"></h2>
   <div class="bigmeadow" id="doneMeadow"></div>
   <p class="note" id="doneNote"></p>
   <button class="bigbtn" id="again">Trace again</button>
@@ -333,18 +338,29 @@ $("#showme").addEventListener("click", () => {
 function nextLetter(){
   glyph = queue[done];
   hintUsed = false;
-  $("#sayText").textContent = (PG.isBig(glyph) ? "Big " : "Little ") + glyph;
+  $("#sayText").textContent = PG.isDigit(glyph) ? glyph
+                            : (PG.isBig(glyph) ? "Big " : "Little ") + glyph;
   renderLetter();
   PG.speak("Let's write " + PG.named(glyph) + ".");
 }
 
 function buildQueue(){
+  const pool = PG.focus();
   const out = [];
-  while(out.length < LETTERS_PER_GAME){
-    for(const L of PG.shuffle(PG.POOL.slice())){
+  // The guard stops this spinning forever if nothing in the set can
+  // be traced. Everything can today; newGame checks the result
+  // rather than trusting that to stay true.
+  for(let pass = 0; out.length < LETTERS_PER_GAME && pass < 60; pass++){
+    for(const L of PG.shuffle(pool.slice())){
       if(out.length >= LETTERS_PER_GAME) break;
-      const big = caseMode === "upper" || (caseMode === "both" && Math.random() < 0.5);
-      out.push(PG.cased(L, big));
+      const big = !PG.isDigit(L) &&
+                  (caseMode === "upper" || (caseMode === "both" && Math.random() < 0.5));
+      const g = PG.cased(L, big);
+      // Only a glyph with strokes can be traced. A glyph without
+      // them measures zero length, which trips the short-stroke
+      // shortcut meant for the dots on i and j and hands her the
+      // letter as an instant win. Skip it rather than offer it.
+      if(PG.traceable(g)) out.push(g);
     }
   }
   return out;
@@ -352,6 +368,13 @@ function buildQueue(){
 
 function newGame(){
   queue = buildQueue();
+  // Nothing traceable in her set. Say so instead of opening a game
+  // that cannot be played.
+  if(!queue.length){
+    PG.showScreen("title");
+    PG.speak("Pick something to write first.");
+    return;
+  }
   done = 0; cleanLetters = 0;
   PG.fillMeadow(meadowEl, LETTERS_PER_GAME, 0);
   PG.showScreen("game");
@@ -361,13 +384,15 @@ function newGame(){
 function finish(){
   PG.fillMeadow($("#doneMeadow"), LETTERS_PER_GAME, LETTERS_PER_GAME);
   const perfect = cleanLetters === LETTERS_PER_GAME;
-  $("#doneTitle").textContent = perfect ? "All on your own!" : "The meadow is full!";
+  const S = PG.skin();
+  $("#doneTitle").textContent = perfect ? "All on your own!" : "The " + S.place + " is full!";
   $("#doneNote").textContent = perfect
-    ? "Eight letters, no peeking."
+    ? LETTERS_PER_GAME + " in a row, no peeking."
     : cleanLetters + " of " + LETTERS_PER_GAME + " traced without a hint.";
   PG.showScreen("done");
   PG.cheer();
-  PG.speak(perfect ? "Wow! You wrote every letter by yourself." : "Nice writing. The meadow is full.");
+  PG.speak(perfect ? "Wow! You wrote every one by yourself."
+                   : "Nice writing. The " + S.place + " is full.");
 }
 
 /* ---------- settings ---------- */
@@ -392,7 +417,9 @@ $("#start").addEventListener("click", () => { PG.unlockAudio(); PG.speak("Let's 
 $("#again").addEventListener("click", newGame);
 $("#quit").addEventListener("click", () => { speechSynthesis.cancel(); PG.showScreen("title"); });
 
-$("#hero").innerHTML = PG.ponySVG(4);
+PG.mountPicker($("#picker"), {collapsible:true});
+
+$("#hero").innerHTML = PG.critterSVG(4);
 PG.fillMeadow(meadowEl, LETTERS_PER_GAME, 0);
 PG.noDoubleTapZoom();
 </script>

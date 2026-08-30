@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Letters">
 <meta name="theme-color" content="#F7D5E4">
-<title>Pony Letters</title>
+<title data-word="letters">Pony Letters</title>
 <link rel="stylesheet" href="shared.css">
 <style>
   #title{align-items:center;justify-content:center;gap:16px;text-align:center;overflow-y:auto}
@@ -40,8 +40,9 @@
 <!-- ================= TITLE ================= -->
 <section class="screen on" id="title">
   <div id="hero"></div>
-  <h1 class="title">Pony <em>Letters</em></h1>
-  <p class="sub">Listen for the letter, then tap it. Every letter you find brings a pony to the meadow.</p>
+  <h1 class="title"><span data-word="name">Pony</span> <em>Letters</em></h1>
+  <p class="sub">Listen for it, then tap it. Every one you find brings a
+     <span data-word="one">pony</span> to the <span data-word="place">meadow</span>.</p>
 
   <div class="setting">
     <label>She hears</label>
@@ -58,6 +59,11 @@
       <button id="cUpper" aria-pressed="false"><span class="g">A</span>BIG</button>
       <button id="cBoth"  aria-pressed="false"><span class="g">Aa</span>both</button>
     </div>
+  </div>
+
+  <div class="setting" style="width:100%;max-width:520px">
+    <label>Working on</label>
+    <div id="picker"></div>
   </div>
 
   <div class="voicerow">
@@ -94,7 +100,7 @@
 
 <!-- ================= DONE ================= -->
 <section class="screen donewrap" id="done">
-  <h2 id="doneTitle">The meadow is full!</h2>
+  <h2 id="doneTitle"></h2>
   <div class="bigmeadow" id="doneMeadow"></div>
   <p class="note" id="doneNote"></p>
   <div class="chiprow" id="missed"></div>
@@ -113,17 +119,26 @@ const gridEl = $("#grid"), shelfEl = $("#shelf"), meadowEl = $("#meadow");
 
 let mode = "name";        // name | sound
 let caseMode = "lower";   // lower | upper | both
+// What the prompt actually used this round. Not the same as mode:
+// a numeral has no initial sound, so a sounds round falls back to
+// naming rather than asking for something that cannot be said.
+let roundSound = false;
 let round = 0, target = null, locked = false, firstTry = true;
 let earned = 0, cleanRounds = 0, missed = [];
 
 /* ---------- what the voice says ---------- */
-const ask     = g => mode === "name" ? "Find " + PG.named(g) + "." : "Find " + PG.starts(g) + ".";
-const praise  = g => mode === "name"
-  ? "Yes! " + PG.named(g) + "."
-  : "Yes! " + PG.NAMES[PG.base(g)] + " is for " + PG.KEYWORD[PG.base(g)] + ".";
-const correct = (picked, want) => mode === "name"
-  ? "That one is " + PG.named(picked) + ". Now find " + PG.named(want) + "."
-  : "That one starts " + PG.KEYWORD[PG.base(picked)] + ". Now find " + PG.starts(want) + ".";
+const ask    = g => "Find " + (roundSound ? PG.starts(g) : PG.named(g)) + ".";
+const praise = g => roundSound
+  ? "Yes! " + PG.NAMES[PG.base(g)] + " is for " + PG.KEYWORD[PG.base(g)] + "."
+  : "Yes! " + PG.named(g) + ".";
+// A sounds round can still be answered with a numeral, which has
+// no keyword to name it by, so the correction falls back to naming
+// the thing she actually tapped.
+const correct = (picked, want) => {
+  const pk = roundSound && PG.KEYWORD[PG.base(picked)];
+  const said = pk ? "That one starts " + pk + "." : "That one is " + PG.named(picked) + ".";
+  return said + " Now find " + (roundSound ? PG.starts(want) : PG.named(want)) + ".";
+};
 
 /* ---------- rounds ---------- */
 const tileCount = () => round <= 4 ? 4 : round <= 8 ? 6 : 9;
@@ -133,27 +148,47 @@ function buildRound(){
   shelfEl.innerHTML = "";
 
   const n = tileCount();
-  const big = caseMode === "upper" || (caseMode === "both" && Math.random() < 0.5);
-  const tLetter = PG.POOL[(Math.random()*PG.POOL.length)|0];
+  const pool = PG.focus();
+
+  // Sounds mode has nothing to ask for a numeral. If she is
+  // practising only numbers there is no sounds round to build, so
+  // this round is asked by name instead of asking for a sound that
+  // does not exist.
+  const sayable = pool.filter(PG.hasSound);
+  roundSound = mode === "sound" && sayable.length > 0;
+  const from  = roundSound ? sayable : pool;
+
+  const tLetter = from[(Math.random()*from.length)|0];
+  const digit   = PG.isDigit(tLetter);
+  const big     = !digit && (caseMode === "upper" || (caseMode === "both" && Math.random() < 0.5));
   target = PG.cased(tLetter, big);
 
   const set = [target];
 
   // In "both" + names, the target's other case is the sharpest
   // distractor there is -- she has to hear "big" vs "little" to
-  // pick. In sounds mode it would be a second right answer.
-  if(caseMode === "both" && mode === "name") set.push(PG.cased(tLetter, !big));
+  // pick. In sounds mode it would be a second right answer, and a
+  // numeral has no other case to offer.
+  if(!digit && caseMode === "both" && !roundSound) set.push(PG.cased(tLetter, !big));
 
-  const table = big ? PG.CONFUSE_UPPER : PG.CONFUSE_LOWER;
-  for(const c of PG.shuffle((table[tLetter]||[]).slice()))
-    if(set.length < n && PG.POOL.includes(c)) set.push(PG.cased(c, big));
-
-  for(const c of PG.shuffle(PG.POOL.slice())){
-    if(set.length >= n) break;
-    const mixBig = caseMode === "both" ? Math.random() < 0.5 : big;
-    const g = PG.cased(c, mixBig);
+  // Distractors go on in order of how much they teach: the glyphs
+  // she actually confuses this one with, then the rest of her focus
+  // set, then the rest of the same kind, then anything. The later
+  // tiers matter because the board grows to nine and a focus set may
+  // be far smaller than that -- a board that cannot fill is a board
+  // she can finish by elimination.
+  const table = digit ? PG.CONFUSE_LOWER : (big ? PG.CONFUSE_UPPER : PG.CONFUSE_LOWER);
+  const push = c => {
+    if(set.length >= n) return;
+    const cBig = PG.isDigit(c) ? false
+               : caseMode === "both" ? Math.random() < 0.5 : big;
+    const g = PG.cased(c, cBig);
     if(!set.includes(g) && PG.base(g) !== tLetter) set.push(g);
-  }
+  };
+  PG.shuffle((table[tLetter] || []).slice()).forEach(push);
+  PG.shuffle(pool.slice()).forEach(push);
+  PG.shuffle((digit ? PG.DIGITS : PG.ALL_LETTERS).slice()).forEach(push);
+  PG.shuffle(PG.ALL_GLYPHS.slice()).forEach(push);
   PG.shuffle(set);
 
   gridEl.style.setProperty("--cols", set.length <= 4 ? 2 : 3);
@@ -169,7 +204,7 @@ gridEl.addEventListener("click", e => {
   const picked = tile.dataset.g;
 
   // Sounds mode ignores case -- B and b say the same thing.
-  const right = mode === "sound" ? PG.base(picked) === PG.base(target) : picked === target;
+  const right = roundSound ? PG.base(picked) === PG.base(target) : picked === target;
 
   if(right){
     locked = true;
@@ -197,17 +232,18 @@ $("#say").addEventListener("click", () => { if(target) PG.speak(ask(target)); })
 function finish(){
   PG.fillMeadow($("#doneMeadow"), ROUNDS, ROUNDS);
   const perfect = cleanRounds === ROUNDS;
-  $("#doneTitle").textContent = perfect ? "Every one, first try!" : "The meadow is full!";
+  const S = PG.skin();
+  $("#doneTitle").textContent = perfect ? "Every one, first try!" : "The " + S.place + " is full!";
   $("#doneNote").textContent = perfect
-    ? "12 ponies, no wobbles."
+    ? ROUNDS + " " + S.many + ", no wobbles."
     : cleanRounds + " of " + ROUNDS + " on the first try. Still worth practicing:";
   $("#missed").innerHTML = perfect ? "" :
     [...new Set(missed.map(m => m.want))].slice(0,6)
       .map(g => `<div class="chip">${PG.tileSVG(g)}<b>${PG.NAMES[PG.base(g)]}</b></div>`).join("");
   PG.showScreen("done");
   PG.cheer();
-  PG.speak(perfect ? "Wow! You found every letter on the first try."
-                   : "The meadow is full. Great job.");
+  PG.speak(perfect ? "Wow! You found every one on the first try."
+                   : "The " + S.place + " is full. Great job.");
 }
 
 function newGame(){
@@ -239,8 +275,14 @@ $("#cBoth").addEventListener("click",  () => setCase("both"));
 setMode(PG.store.get("mode") || "name");
 setCase(PG.store.get("case") || "lower");
 
-const sample = () => mode === "name" ? "Find little gee. Find big Bee."
-                                     : "Find the one that starts goat.";
+// The sample uses whatever she is actually practising, so the voice
+// test is a real preview rather than a fixed line about letters she
+// may have turned off.
+const sample = () => {
+  const on = PG.focus(), sayable = on.filter(PG.hasSound);
+  const g = (mode === "sound" && sayable.length ? sayable : on)[0];
+  return "Find " + (mode === "sound" && PG.hasSound(g) ? PG.starts(g) : PG.named(g)) + ".";
+};
 PG.setTalkIndicator($("#say"));
 PG.wireVoicePicker(() => PG.speak(sample()));
 $("#tryVoice").addEventListener("click", () => { PG.unlockAudio(); PG.speak(sample()); });
@@ -249,7 +291,9 @@ $("#start").addEventListener("click", () => { PG.unlockAudio(); PG.speak("Let's 
 $("#again").addEventListener("click", newGame);
 $("#quit").addEventListener("click", () => { speechSynthesis.cancel(); PG.showScreen("title"); });
 
-$("#hero").innerHTML = PG.ponySVG(1);
+PG.mountPicker($("#picker"), {collapsible:true});
+
+$("#hero").innerHTML = PG.critterSVG(1);
 PG.fillMeadow(meadowEl, ROUNDS, 0);
 PG.noDoubleTapZoom();
 </script>

@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Ponies">
 <meta name="theme-color" content="#F7D5E4">
-<title>Pony Games</title>
+<title data-word="games">Pony Games</title>
 <link rel="stylesheet" href="shared.css">
 <style>
   body{overflow-y:auto}
@@ -36,39 +36,49 @@
   .gamecard p{font-size:14px;color:var(--plum);line-height:1.45}
   .gamecard .tag{
     display:inline-block;margin-top:7px;font-size:11px;font-weight:800;letter-spacing:.7px;
-    text-transform:uppercase;color:var(--rule-base);background:#FBE3EB;
+    text-transform:uppercase;color:var(--rule-base);background:var(--tag-bg);
     padding:4px 10px;border-radius:999px;
   }
 
   .soon{opacity:.5}
-  .soon .tag{color:var(--plum);background:#EFE6F4}
+  .soon .tag{color:var(--plum);background:var(--tag-soon)}
 
   .footnote{font-size:13px;color:var(--plum);text-align:center;max-width:44ch;line-height:1.55}
 </style>
 </head>
 <body>
 <main class="hub">
-  <div id="hero"></div>
-  <h1 class="hubtitle">Pony <em>Games</em></h1>
+  <div id="hero" data-critter="0"></div>
+  <h1 class="hubtitle"><span data-word="name">Pony</span> <em>Games</em></h1>
 
   <div class="cards">
     <a class="gamecard" href="letters.html">
-      <div class="art" id="a1"></div>
+      <div class="art" data-critter="1"></div>
       <div>
-        <h2>Pony Letters</h2>
+        <h2><span data-word="name">Pony</span> Letters</h2>
         <p>Hear a letter, find it on the board. Mixes in the letters that look alike on purpose.</p>
         <span class="tag">Reading it</span>
       </div>
     </a>
 
     <a class="gamecard" href="trace.html">
-      <div class="art" id="a2"></div>
+      <div class="art" data-critter="4"></div>
       <div>
-        <h2>Pony Trace</h2>
+        <h2><span data-word="name">Pony</span> Trace</h2>
         <p>Write the letter with your finger, starting on the green dot and following the right path.</p>
         <span class="tag">Writing it</span>
       </div>
     </a>
+  </div>
+
+  <div class="setting">
+    <label>Skin</label>
+    <div id="skin"></div>
+  </div>
+
+  <div class="setting" style="width:100%;max-width:520px">
+    <label>Working on</label>
+    <div id="picker"></div>
   </div>
 
   <p class="footnote">
@@ -80,9 +90,11 @@
 
 <script src="shared.js"></script>
 <script>
-  document.getElementById("hero").innerHTML = PG.ponySVG(0);
-  document.getElementById("a1").innerHTML   = PG.ponySVG(1);
-  document.getElementById("a2").innerHTML   = PG.ponySVG(4);
+  // The art and the wording are painted by PG.applySkin, off the
+  // data-critter and data-word attributes above, so switching skin
+  // redraws the hub without reloading it.
+  PG.mountSkinSwitch(document.getElementById("skin"));
+  PG.mountPicker(document.getElementById("picker"));
 </script>
 </body>
 </html>

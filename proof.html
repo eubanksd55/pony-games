@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glyph proof sheet</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  html,body{height:auto;overflow:auto}
+  body{background:#F3EEF7;padding:18px;font-family:var(--ui)}
+  h2{font-family:var(--glyph);color:var(--plum-deep);margin:20px 0 10px;font-size:22px}
+  .sheet{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+  .cell{background:#fff;border-radius:12px;padding:6px}
+  .cell svg{width:100%;height:auto;display:block}
+  .cap{display:flex;justify-content:space-between;font-size:11px;font-weight:800;
+       color:var(--plum);padding:2px 4px 0}
+  .cap .n{color:#B0429A}
+  .bad{outline:3px solid #E4557E}
+  .startdot{fill:#1E9E63}
+  .endarrow{fill:#E4557E}
+  .idx{font:700 9px var(--ui);fill:#B0429A}
+</style>
+</head>
+<body>
+<div id="out"></div>
+
+<script src="shared.js"></script>
+<script>
+"use strict";
+// Renders every glyph in STROKES with a green dot where each stroke
+// STARTS, a pink arrowhead where it ENDS, and the stroke index, so
+// stroke order and direction can be checked by eye rather than by
+// trusting the path data. Not shipped -- a bench tool.
+
+const svgNS = "http://www.w3.org/2000/svg";
+const scratch = document.createElementNS(svgNS, "svg");
+scratch.setAttribute("width", 0); scratch.setAttribute("height", 0);
+document.body.appendChild(scratch);
+
+function endpoints(d){
+  const p = document.createElementNS(svgNS, "path");
+  p.setAttribute("d", d);
+  scratch.appendChild(p);
+  const len = p.getTotalLength();
+  const a = p.getPointAtLength(0);
+  const b = p.getPointAtLength(len);
+  const back = p.getPointAtLength(Math.max(0, len - 2));
+  scratch.removeChild(p);
+  return {len, a:{x:a.x,y:a.y}, b:{x:b.x,y:b.y}, back:{x:back.x,y:back.y}};
+}
+
+function cell(g){
+  const strokes = PG.STROKES[g] || [];
+  let marks = "", bad = !strokes.length;
+  strokes.forEach((d, i) => {
+    const e = endpoints(d);
+    if(!isFinite(e.len) || e.len === 0) bad = true;
+    const ang = Math.atan2(e.b.y - e.back.y, e.b.x - e.back.x) * 180 / Math.PI;
+    marks += `<circle class="startdot" cx="${e.a.x}" cy="${e.a.y}" r="3.4"/>
+      <text class="idx" x="${e.a.x + 4.5}" y="${e.a.y - 3.5}">${i + 1}</text>
+      <path class="endarrow" d="M0 -2.6 L5.2 0 L0 2.6 Z"
+            transform="translate(${e.b.x} ${e.b.y}) rotate(${ang})"/>`;
+  });
+  return `<div class="cell ${bad ? "bad" : ""}">
+    <svg viewBox="0 0 100 100">
+      <rect class="card" x="1.5" y="1.5" width="97" height="97" rx="13"/>
+      ${PG.ruling()}
+      ${strokes.map(d => `<path class="drawn" d="${d}"/>`).join("")}
+      ${marks}
+    </svg>
+    <div class="cap"><span>${g === " " ? "sp" : g}</span><span class="n">${strokes.length}</span></div>
+  </div>`;
+}
+
+const lower  = PG.ALL_LETTERS;
+const upper  = PG.ALL_LETTERS.map(c => c.toUpperCase());
+const digits = PG.DIGITS;
+
+document.getElementById("out").innerHTML = [
+  ["lowercase a-z", lower],
+  ["uppercase A-Z", upper],
+  ["digits 0-9",    digits]
+].map(([t, list]) =>
+  `<h2>${t}</h2><div class="sheet">${list.map(cell).join("")}</div>`
+).join("");
+
+// Anything missing strokes, or measuring zero length, is the exact
+// failure that used to hand the tracing game a free win.
+const missing = [].concat(lower, upper, digits).filter(g => !PG.traceable(g));
+console.log("[proof] glyphs total:", lower.length + upper.length + digits.length);
+console.log("[proof] missing strokes:", missing.length ? missing.join(" ") : "none");
+</script>
+</body>
+</html>

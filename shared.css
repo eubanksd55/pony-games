@@ -19,8 +19,37 @@
   --plum-deep:#57315C;
   --yes:#8FDCBB;
   --no:#FFC49B;
+  --btn-shade:#B93C63;
+  --tag-bg:#FBE3EB;
+  --tag-soon:#EFE6F4;
+  --chip-card:#F2E3D2;
   --glyph:"Chalkboard SE","Avenir Next Rounded","Avenir Next","Trebuchet MS",sans-serif;
   --ui:"Avenir Next","Trebuchet MS",system-ui,sans-serif;
+}
+
+/* The dino skin is the same games in a different coat. Only the
+   palette changes here -- every rule below is written against the
+   tokens, so nothing else needs a second version. shared.js sets
+   data-theme on <html> before the first paint. */
+:root[data-theme="dino"]{
+  --sky-top:#EDF3D4;
+  --sky-mid:#D7E9BE;
+  --sky-low:#BEDCB4;
+  --grass:#93CE87;
+  --grass-deep:#5EA45F;
+  --paper:#FFFDF4;
+  --rule-base:#D9702B;
+  --rule-mid:#93BF6C;
+  --ink:#2E3B2A;
+  --ghost:#CFDCC6;
+  --plum:#4F7A46;
+  --plum-deep:#2C5533;
+  --yes:#A9DC8F;
+  --no:#FFC49B;
+  --btn-shade:#A9541D;
+  --tag-bg:#E4F0CB;
+  --tag-soon:#E2EAD9;
+  --chip-card:#EDE6CF;
 }
 
 *{box-sizing:border-box;margin:0;padding:0}
@@ -49,9 +78,9 @@ h1.title em{font-style:normal;color:var(--rule-base)}
 .bigbtn{
   font-family:var(--glyph);font-size:clamp(25px,4.2vw,36px);color:#fff;
   background:var(--rule-base);border:none;border-radius:999px;padding:19px 56px;
-  box-shadow:0 7px 0 #B93C63;cursor:pointer;margin-top:4px;
+  box-shadow:0 7px 0 var(--btn-shade);cursor:pointer;margin-top:4px;
 }
-.bigbtn:active{transform:translateY(5px);box-shadow:0 2px 0 #B93C63}
+.bigbtn:active{transform:translateY(5px);box-shadow:0 2px 0 var(--btn-shade)}
 
 .tinybtn{
   font-family:var(--ui);font-size:14px;font-weight:700;color:var(--plum);
@@ -133,6 +162,48 @@ select.voices{
 @keyframes land{from{opacity:0;transform:translateY(-14px) scale(.8)}}
 .chip svg{width:clamp(56px,7.6vw,84px);height:clamp(56px,7.6vw,84px);border-radius:12px}
 .chip b{font-family:var(--ui);font-size:clamp(11px,1.5vw,14px);color:var(--plum);font-weight:800;letter-spacing:.4px}
-.chip .card{fill:#F2E3D2}
+.chip .card{fill:var(--chip-card)}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- glyph picker ---------- */
+/* One component, two homes: always open on the hub, collapsed
+   behind its summary on each game's title screen. Both write to
+   the same stored set, so they can never disagree. */
+.picker{display:flex;flex-direction:column;align-items:center;gap:9px;width:100%;max-width:520px}
+.picksum{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;
+  font-family:var(--ui);font-size:13px;font-weight:700;color:var(--plum);
+  background:#FFFFFF7A;border:none;border-radius:999px;padding:9px 16px;cursor:default;
+}
+.picker.collapsible .picksum{cursor:pointer}
+.picksum .list{font-family:var(--glyph);font-size:17px;color:var(--plum-deep);letter-spacing:2px}
+.picksum .chev{border:solid var(--plum);border-width:0 2px 2px 0;padding:3px;transform:rotate(45deg);margin-top:-3px}
+.picker.collapsible .picksum[aria-expanded="true"] .chev{transform:rotate(-135deg);margin-top:2px}
+
+.pickbody{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
+.picker.collapsible .picksum[aria-expanded="false"] + .pickbody{display:none}
+
+.glyphgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(34px,1fr));gap:4px;width:100%}
+.glyphgrid button{
+  font-family:var(--glyph);font-size:19px;font-weight:700;line-height:1;
+  color:var(--plum);background:#FFFFFFC4;border:2px solid #fff;border-radius:10px;
+  padding:7px 0;cursor:pointer;
+}
+.glyphgrid button[aria-pressed="true"]{background:var(--plum);border-color:var(--plum);color:#fff}
+
+.presets{display:flex;gap:5px;flex-wrap:wrap;justify-content:center}
+.presets button{
+  font-family:var(--ui);font-size:12px;font-weight:700;color:var(--plum);
+  background:#FFFFFF7A;border:none;border-radius:999px;padding:7px 13px;cursor:pointer;
+}
+.presets button:active{background:#fff}
+
+/* ---------- skin switch ---------- */
+.skinset{display:flex;gap:5px;background:#FFFFFF7A;padding:5px;border-radius:999px}
+.skinset button{
+  display:flex;align-items:center;gap:7px;font-family:var(--ui);font-size:14px;font-weight:700;
+  color:var(--plum);background:transparent;border:none;padding:7px 16px 7px 9px;border-radius:999px;cursor:pointer;
+}
+.skinset button[aria-pressed="true"]{background:var(--plum);color:#fff}
+.skinset svg{width:30px;height:26px;display:block}

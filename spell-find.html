@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Word Find">
+<meta name="theme-color" content="#F7D5E4">
+<title data-word="find">Pony Word Find</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  #title{align-items:center;justify-content:center;gap:16px;text-align:center;overflow-y:auto}
+  #hero{width:min(170px,40vw)}
+
+  /* A word chip is as wide as the word. The shared chip is square,
+     which is right for one letter and wrong for five. */
+  #missed .chip svg{width:clamp(120px,26vw,210px);height:auto;border-radius:12px}
+</style>
+</head>
+<body>
+
+<!-- ================= TITLE ================= -->
+<section class="screen on" id="title">
+  <div id="hero"></div>
+  <h1 class="title"><span data-word="name">Pony</span> <em>Word Find</em></h1>
+  <p class="sub">Hear a word, then find it in the lineup. The other words are
+     picked to look like it on purpose.</p>
+
+  <div class="setting">
+    <label>She hears</label>
+    <div class="pillset" role="group">
+      <button id="mWord" aria-pressed="true">Just the word</button>
+      <button id="mSpell" aria-pressed="false">Word and letters</button>
+    </div>
+  </div>
+
+  <div class="setting" style="width:100%;max-width:520px">
+    <label>This week's words</label>
+    <div id="picker"></div>
+  </div>
+
+  <div class="voicerow">
+    <select class="voices"></select>
+    <button class="tinybtn" id="tryVoice">Hear it</button>
+  </div>
+
+  <button class="bigbtn" id="start">Play</button>
+  <a class="tinybtn" href="index.html" style="text-decoration:none">All games</a>
+</section>
+
+<!-- ================= GAME ================= -->
+<section class="screen" id="game">
+  <div class="meadow" id="meadow"></div>
+  <div class="gamebar">
+    <div class="spacer"></div>
+    <button class="speaker" id="say">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
+        <path d="M17 8.5a5 5 0 010 7M20 6a9 9 0 010 12"/>
+      </svg>
+      <span>Hear it again</span>
+    </button>
+    <div class="spacer"></div>
+    <button class="iconbtn" id="quit" aria-label="Back to start">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="wordpad" id="lineup"></div>
+</section>
+
+<!-- ================= DONE ================= -->
+<section class="screen donewrap" id="done">
+  <h2 id="doneTitle"></h2>
+  <div class="bigmeadow" id="doneMeadow"></div>
+  <p class="note" id="doneNote"></p>
+  <div class="chiprow" id="missed"></div>
+  <button class="bigbtn" id="again">Play again</button>
+  <a class="tinybtn" href="index.html" style="text-decoration:none">All games</a>
+</section>
+
+<script src="shared.js"></script>
+<script>
+"use strict";
+
+const ROUNDS = 8;
+
+const $ = s => document.querySelector(s);
+const lineupEl = $("#lineup"), meadowEl = $("#meadow");
+
+let mode = "word";   // word | spell
+let round = 0, target = "", locked = false, firstTry = true;
+let earned = 0, cleanRounds = 0, missed = [];
+
+// Spelled out with commas so the voice pauses between letters
+// instead of running them together into a nonsense word.
+const spellOut = w => w.split("").map(c => PG.NAMES[c] || c).join(", ");
+const ask = w => "Find the word " + w + "." + (mode === "spell" ? " " + spellOut(w) + "." : "");
+
+/* ---------- rounds ---------- */
+// Three choices to start, four once she is warm. More than four
+// full-width words do not fit on a phone without shrinking them
+// past the point where the difference between "then" and "them"
+// is visible, which is the whole task.
+const optionCount = () => round <= 3 ? 3 : 4;
+
+function buildRound(){
+  round++; locked = false; firstTry = true;
+
+  const pool = PG.words();
+  target = pool[(Math.random() * pool.length) | 0];
+
+  // Her own words first, since those are the ones she has to tell
+  // apart this week; the lookalike list fills the rest, because a
+  // five-word list cannot fill a four-word lineup on its own once
+  // the answer is taken out.
+  const set = [target];
+  const push = w => { if(set.length < optionCount() && !set.includes(w)) set.push(w); };
+  PG.shuffle(pool.slice()).forEach(push);
+  PG.lookalikes(target, 12).forEach(push);
+  PG.shuffle(set);
+
+  // Every card in a lineup is the width of the longest word in it,
+  // so the answer cannot be picked out by how wide it is.
+  const cells = Math.max(...set.map(w => w.length));
+  lineupEl.innerHTML = set.map(w =>
+    `<button class="wordopt" data-w="${w}">${PG.wordSVG(w, {cells})}</button>`).join("");
+
+  PG.speak(ask(target));
+}
+
+lineupEl.addEventListener("click", e => {
+  const opt = e.target.closest(".wordopt");
+  if(!opt || locked) return;
+  const picked = opt.dataset.w;
+
+  if(picked === target){
+    locked = true;
+    opt.classList.add("right");
+    earned++; if(firstTry) cleanRounds++;
+    PG.fillMeadow(meadowEl, ROUNDS, earned);
+    PG.ding();
+    PG.speak("Yes! " + target + ". " + spellOut(target) + ".",
+      () => setTimeout(() => round >= ROUNDS ? finish() : buildRound(), 220));
+  } else {
+    firstTry = false;
+    opt.classList.add("wrong");
+    opt.setAttribute("disabled","");
+    PG.buzz();
+    if(!missed.includes(target)) missed.push(target);
+    // Naming what she actually tapped is the correction that
+    // teaches: the two words look alike, so hearing them side by
+    // side is the difference she needs.
+    PG.speak("That one says " + picked + ". Find " + target + ".");
+  }
+});
+
+$("#say").addEventListener("click", () => { if(target) PG.speak(ask(target)); });
+
+/* ---------- finish ---------- */
+function finish(){
+  PG.fillMeadow($("#doneMeadow"), ROUNDS, ROUNDS);
+  const perfect = cleanRounds === ROUNDS;
+  const S = PG.skin();
+  $("#doneTitle").textContent = perfect ? "Every one, first try!" : "The " + S.place + " is full!";
+  $("#doneNote").textContent = perfect
+    ? ROUNDS + " " + S.many + ", no wobbles."
+    : cleanRounds + " of " + ROUNDS + " on the first try. Still worth practicing:";
+  $("#missed").innerHTML = perfect ? "" :
+    missed.slice(0,4).map(w => `<div class="chip">${PG.wordSVG(w)}</div>`).join("");
+  PG.showScreen("done");
+  PG.cheer();
+  PG.speak(perfect ? "Wow! You found every word on the first try."
+                   : "The " + S.place + " is full. Great job.");
+}
+
+function newGame(){
+  round = 0; earned = 0; cleanRounds = 0; missed = [];
+  PG.fillMeadow(meadowEl, ROUNDS, 0);
+  PG.showScreen("game");
+  buildRound();
+}
+
+/* ---------- settings ---------- */
+function setMode(m){
+  mode = m;
+  $("#mWord").setAttribute("aria-pressed", String(m === "word"));
+  $("#mSpell").setAttribute("aria-pressed", String(m === "spell"));
+  PG.store.set("findmode", m);
+}
+$("#mWord").addEventListener("click", () => setMode("word"));
+$("#mSpell").addEventListener("click", () => setMode("spell"));
+setMode(PG.store.get("findmode") || "word");
+
+// The sample is a word she is actually practising, so the voice
+// test previews the real thing rather than a fixed line.
+const sample = () => ask(PG.words()[0]);
+PG.setTalkIndicator($("#say"));
+PG.wireVoicePicker(() => PG.speak(sample()));
+$("#tryVoice").addEventListener("click", () => { PG.unlockAudio(); PG.speak(sample()); });
+
+$("#start").addEventListener("click", () => { PG.unlockAudio(); PG.speak("Let's find some words!", newGame); });
+$("#again").addEventListener("click", newGame);
+$("#quit").addEventListener("click", () => { speechSynthesis.cancel(); PG.showScreen("title"); });
+
+PG.mountWordPicker($("#picker"), {collapsible:true});
+
+$("#hero").innerHTML = PG.critterSVG(1);
+PG.fillMeadow(meadowEl, ROUNDS, 0);
+PG.noDoubleTapZoom();
+</script>
+</body>
+</html>

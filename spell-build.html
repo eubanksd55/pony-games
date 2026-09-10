@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Word Build">
+<meta name="theme-color" content="#F7D5E4">
+<title data-word="build">Pony Word Build</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  #title{align-items:center;justify-content:center;gap:16px;text-align:center;overflow-y:auto}
+  #hero{width:min(170px,40vw)}
+
+  .play{flex:1 1 auto;display:flex;flex-direction:column;gap:clamp(14px,4vh,34px);
+        align-items:center;justify-content:center;min-height:0}
+  #slots{width:100%;max-width:min(820px,94vw)}
+  #slots svg{width:100%;height:auto;display:block}
+  #slots.wrong{animation:shake .4s ease}
+
+  #peek{opacity:.75}
+</style>
+</head>
+<body>
+
+<!-- ================= TITLE ================= -->
+<section class="screen on" id="title">
+  <div id="hero"></div>
+  <h1 class="title"><span data-word="name">Pony</span> <em>Word Build</em></h1>
+  <p class="sub">The letters are all mixed up. Tap them in the right order to
+     put the word back together.</p>
+
+  <div class="setting" style="width:100%;max-width:520px">
+    <label>This week's words</label>
+    <div id="picker"></div>
+  </div>
+
+  <div class="voicerow">
+    <select class="voices"></select>
+    <button class="tinybtn" id="tryVoice">Hear it</button>
+  </div>
+
+  <button class="bigbtn" id="start">Play</button>
+  <a class="tinybtn" href="index.html" style="text-decoration:none">All games</a>
+</section>
+
+<!-- ================= GAME ================= -->
+<section class="screen" id="game">
+  <div class="meadow" id="meadow"></div>
+
+  <div class="gamebar">
+    <button class="tinybtn" id="peek">Show me</button>
+    <div class="spacer"></div>
+    <button class="speaker" id="say">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
+        <path d="M17 8.5a5 5 0 010 7M20 6a9 9 0 010 12"/>
+      </svg>
+      <span id="sayText">the</span>
+    </button>
+    <div class="spacer"></div>
+    <button class="iconbtn" id="quit" aria-label="Back to start">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="play">
+    <div id="slots"></div>
+    <div class="bank" id="bank"></div>
+  </div>
+</section>
+
+<!-- ================= DONE ================= -->
+<section class="screen donewrap" id="done">
+  <h2 id="doneTitle"></h2>
+  <div class="bigmeadow" id="doneMeadow"></div>
+  <p class="note" id="doneNote"></p>
+  <button class="bigbtn" id="again">Play again</button>
+  <a class="tinybtn" href="index.html" style="text-decoration:none">All games</a>
+</section>
+
+<script src="shared.js"></script>
+<script>
+"use strict";
+
+const WORDS_PER_GAME = 5;
+
+const $ = s => document.querySelector(s);
+const slotsEl = $("#slots"), bankEl = $("#bank"), meadowEl = $("#meadow");
+
+let queue = [], done = 0, word = "", placed = 0;
+let tiles = [], cleanWords = 0, firstTry = true, peeking = false;
+
+/* ---------- drawing ---------- */
+// The word being built, with the letters she has placed showing
+// and the box she is on outlined. Peeking fills the whole word in
+// for a moment, so she can check herself without being handed it.
+function drawSlots(){
+  slotsEl.innerHTML = PG.wordSVG(word, {
+    slots: true,
+    mask: i => !peeking && i >= placed,
+    slotClass: i => (peeking || i < placed) ? "filled" : i === placed ? "next" : ""
+  });
+}
+
+// The bank holds exactly the word's letters, shuffled -- no spare
+// letters. Rearranging what is there is a different, easier task
+// than choosing from a crowd, and it is the one she was set.
+function drawBank(){
+  bankEl.innerHTML = tiles.map((t,i) =>
+    `<button data-i="${i}" class="${t.used ? "used" : ""}">${PG.tileSVG(t.letter)}</button>`).join("");
+}
+
+/* ---------- answering ---------- */
+// Checked one letter at a time rather than all at the end. A
+// five-year-old who has put four letters down and is told the
+// whole thing is wrong has no idea which one to move; told at the
+// moment she taps, she does.
+bankEl.addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if(!b || peeking) return;
+  const t = tiles[+b.dataset.i];
+  if(!t || t.used) return;
+
+  if(t.letter === word[placed]){
+    t.used = true;
+    placed++;
+    drawBank();
+    drawSlots();
+    if(placed < word.length){
+      PG.blip();
+    } else {
+      PG.ding();
+      done++;
+      if(firstTry) cleanWords++;
+      PG.fillMeadow(meadowEl, WORDS_PER_GAME, done);
+      PG.speak("You spelled " + word + "!",
+        () => setTimeout(() => done >= WORDS_PER_GAME ? finish() : nextWord(), 300));
+    }
+  } else {
+    firstTry = false;
+    PG.buzz();
+    b.classList.add("wrong");
+    setTimeout(() => b.classList.remove("wrong"), 420);
+    // The next letter is named, not shown. Hearing "next is ee"
+    // while looking at the bank is the step she is practising.
+    PG.speak("Not yet. Next is " + PG.NAMES[word[placed]] + ".");
+  }
+});
+
+/* ---------- show me ---------- */
+// The whole word, for a second and a half, then back to where she
+// was. Long enough to read, short enough that copying it letter by
+// letter is more work than remembering it.
+$("#peek").addEventListener("click", () => {
+  if(peeking || !word) return;
+  firstTry = false;
+  peeking = true;
+  drawSlots();
+  PG.speak(word + ". " + spellOut(word) + ".");
+  setTimeout(() => { peeking = false; drawSlots(); }, 1500);
+});
+
+/* ---------- rounds ---------- */
+// Spelled out with commas so the voice pauses between letters
+// instead of running them together into a nonsense word.
+const spellOut = w => w.split("").map(c => PG.NAMES[c] || c).join(", ");
+
+function nextWord(){
+  word = queue[done];
+  placed = 0;
+  firstTry = true;
+  peeking = false;
+  $("#sayText").textContent = word;
+
+  // Shuffled until it is actually shuffled. A word handed back in
+  // its own order is not a puzzle, and with three letters that
+  // happens about one time in six.
+  const letters = word.split("");
+  let order;
+  for(let i = 0; i < 20; i++){
+    order = PG.shuffle(letters.slice());
+    if(word.length < 2 || order.join("") !== word) break;
+  }
+  tiles = order.map(letter => ({letter, used:false}));
+
+  drawSlots();
+  drawBank();
+  PG.speak("Build the word " + word + ". " + spellOut(word) + ".");
+}
+
+// Every word in her list gets a turn before any word repeats, so a
+// three-word list is still five rounds and still even-handed.
+function buildQueue(){
+  const pool = PG.words();
+  const out = [];
+  while(out.length < WORDS_PER_GAME && pool.length)
+    out.push(...PG.shuffle(pool.slice()).slice(0, WORDS_PER_GAME - out.length));
+  return out;
+}
+
+function newGame(){
+  queue = buildQueue();
+  if(!queue.length){
+    PG.showScreen("title");
+    PG.speak("Add a word to build first.");
+    return;
+  }
+  done = 0; cleanWords = 0;
+  PG.fillMeadow(meadowEl, WORDS_PER_GAME, 0);
+  PG.showScreen("game");
+  nextWord();
+}
+
+function finish(){
+  PG.fillMeadow($("#doneMeadow"), WORDS_PER_GAME, WORDS_PER_GAME);
+  const perfect = cleanWords === WORDS_PER_GAME;
+  const S = PG.skin();
+  $("#doneTitle").textContent = perfect ? "Every one, first try!" : "The " + S.place + " is full!";
+  $("#doneNote").textContent = perfect
+    ? WORDS_PER_GAME + " words built, no wobbles."
+    : cleanWords + " of " + WORDS_PER_GAME + " built on the first try.";
+  PG.showScreen("done");
+  PG.cheer();
+  PG.speak(perfect ? "Wow! You built every word on the first try."
+                   : "The " + S.place + " is full. Great spelling.");
+}
+
+/* ---------- settings ---------- */
+// The sample is a word she is actually practising, so the voice
+// test previews the real thing rather than a fixed line.
+const sample = () => { const w = PG.words()[0]; return "Build the word " + w + ". " + spellOut(w) + "."; };
+
+PG.setTalkIndicator($("#say"));
+PG.wireVoicePicker(() => PG.speak(sample()));
+$("#tryVoice").addEventListener("click", () => { PG.unlockAudio(); PG.speak(sample()); });
+$("#say").addEventListener("click", () => {
+  if(word) PG.speak(word + ". " + spellOut(word) + ".");
+});
+
+$("#start").addEventListener("click", () => { PG.unlockAudio(); PG.speak("Let's build some words!", newGame); });
+$("#again").addEventListener("click", newGame);
+$("#quit").addEventListener("click", () => { speechSynthesis.cancel(); PG.showScreen("title"); });
+
+PG.mountWordPicker($("#picker"), {collapsible:true});
+
+$("#hero").innerHTML = PG.critterSVG(7);
+PG.fillMeadow(meadowEl, WORDS_PER_GAME, 0);
+PG.noDoubleTapZoom();
+</script>
+</body>
+</html>

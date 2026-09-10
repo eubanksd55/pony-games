@@ -265,6 +265,63 @@ function setFocus(list){
   return true;
 }
 
+/* ---------- word bank ---------- */
+// This week's spelling words. Same shape as the focus set: stored
+// per device, edited in one picker, read by every spelling game.
+// A word here is plain lowercase letters -- the glyph geometry only
+// covers a-z and 0-9, and a word with an apostrophe in it would
+// have a letter the tracing game cannot draw.
+const DEFAULT_WORDS = ["zero","one","two","three","the"];
+
+// Distractors for the "find the word" game when her own list is
+// too short to fill a lineup. Chosen so the near-misses are real:
+// the/then/them/there, one/once, to/too/two. Sight words she will
+// meet anyway, never anything longer than her own words.
+const FILLER_WORDS = [
+  "a","i","is","it","in","at","on","up","to","my","we","me","go","no","so","us",
+  "an","as","be","by","do","he","if","of","or","am",
+  "see","the","and","can","for","you","are","was","her","him","his","how","now",
+  "new","old","one","two","six","ten","big","red","run","sat","cat","hat","top",
+  "too","who","why","yes","not","but","out","our","had","has","did","get","got",
+  "this","that","they","them","then","than","with","what","when","here","have",
+  "said","from","were","will","your","four","five","nine","play","like","look",
+  "make","come","some","time","take","went","want","good","help","just","know",
+  "three","seven","eight","zero","there","their","where","these","those","which",
+  "about","after","again","every","first","found","going","great","house","other"
+];
+
+const cleanWord = w => String(w).toLowerCase().replace(/[^a-z]/g, "").slice(0, 12);
+
+function words(){
+  const raw = store.get("words");
+  if(raw === null || raw === undefined) return DEFAULT_WORDS.slice();
+  const list = raw.split(",").map(cleanWord).filter(Boolean);
+  return list.length ? list : DEFAULT_WORDS.slice();
+}
+// Refused rather than saved when it would empty the list, for the
+// same reason the glyph picker refuses: there is no spelling game
+// to build from no words, and a silent fall back to last week's
+// list would read as the picker ignoring her.
+function setWords(list){
+  const clean = [...new Set(list.map(cleanWord).filter(Boolean))];
+  if(!clean.length) return false;
+  store.set("words", clean.join(","));
+  return true;
+}
+
+// Words that look enough like the target to be worth putting next
+// to it: shared opening letters first, then the same length. With
+// a five word list her own words rarely fill a lineup, so the
+// filler list is drawn on second -- a lineup that cannot fill is a
+// lineup she can finish by elimination.
+function lookalikes(word, n){
+  const shared = w => { let i = 0; while(i < w.length && w[i] === word[i]) i++; return i; };
+  const score  = w => shared(w) * 3 + (w.length === word.length ? 2 : 0)
+                    - Math.abs(w.length - word.length);
+  const pool = [...new Set(words().concat(FILLER_WORDS))].filter(w => w !== word);
+  return shuffle(pool).sort((a,b) => score(b) - score(a)).slice(0, n);
+}
+
 /* ---------- chimes ---------- */
 let ac = null;
 function tone(freq,start,dur,type,vol){
@@ -377,6 +434,56 @@ function tileSVG(glyph, cardClass){
   </svg>`;
 }
 
+
+/* Words are drawn from the same strokes as single glyphs, so a
+   word looks the same here as it does under her finger in the
+   tracing game. Letters sit on one shared ruling at a pitch of 46
+   -- the ink of a glyph spans x 32..68, so that leaves a 10 unit
+   gap between letters, close enough to read as one word.
+
+   opts.mask(i, letter) hides a letter without moving the rest,
+   which is how the building game shows empty slots.
+   opts.slots draws a box under each letter position instead.
+   opts.cells widens the card to that many letters without moving
+   the word off centre, so a lineup of cards is one width. Cards
+   sized to their own words would let her answer a lineup by
+   silhouette -- "the" is visibly the short one -- which is
+   exactly the reading she is meant to be doing instead. */
+const WORD_PITCH = 46, WORD_PAD = 14;
+const wordWidth = word => WORD_PAD * 2 + word.length * WORD_PITCH;
+
+function wordSVG(word, opts){
+  opts = opts || {};
+  const gs = word.split("");
+  const cells = Math.max(opts.cells || 0, gs.length);
+  const W = WORD_PAD * 2 + cells * WORD_PITCH;
+  // Half a letter cell per unused column on each side.
+  const lead = (cells - gs.length) * WORD_PITCH / 2;
+
+  const body = gs.map((g, i) => {
+    const drawn = DRAWN[g];
+    const inner = drawn
+      ? drawn.map(d => `<path class="drawn" d="${d}"/>`).join("")
+      : `<text class="glyph" x="50" y="72" text-anchor="middle" font-size="54">${g}</text>`;
+    const hidden = opts.mask && opts.mask(i, g);
+    return `<g transform="translate(${WORD_PAD + lead + i * WORD_PITCH - 27},0)"${hidden ? ' opacity="0"' : ""}>${inner}</g>`;
+  }).join("");
+
+  const slots = opts.slots ? gs.map((g, i) =>
+    `<rect class="slot ${opts.slotClass ? opts.slotClass(i, g) : ""}"
+           x="${WORD_PAD + lead + i * WORD_PITCH + 3}" y="24" width="40" height="64" rx="9"/>`).join("") : "";
+
+  const rule = opts.rule === false ? "" :
+    `<line class="midline"  x1="8" y1="46" x2="${W - 8}" y2="46"/>
+     <line class="baseline" x1="8" y1="72" x2="${W - 8}" y2="72"/>`;
+
+  const card = opts.card === false ? "" :
+    `<rect class="card ${opts.cardClass || ""}" x="1.5" y="17.5" width="${W - 3}" height="77" rx="13"/>`;
+
+  return `<svg viewBox="0 16 ${W} 80" preserveAspectRatio="xMidYMid meet">
+    ${card}${slots}${rule}${body}
+  </svg>`;
+}
 function ponySVG(i, cls){
   const [coat, mane, shade] = COATS[i % COATS.length];
   return `<svg class="${cls||""}" viewBox="0 0 116 96" preserveAspectRatio="xMidYMax meet">
@@ -430,12 +537,14 @@ const SKINS = {
   pony: {
     key:"pony", label:"Ponies", name:"Pony", games:"Pony Games",
     letters:"Pony Letters", trace:"Pony Trace",
+    write:"Pony Word Write", find:"Pony Word Find", build:"Pony Word Build",
     one:"pony", many:"ponies", place:"meadow",
     themeColor:"#F7D5E4", art: ponySVG
   },
   dino: {
     key:"dino", label:"Dinos", name:"Dino", games:"Dino Games",
     letters:"Dino Letters", trace:"Dino Trace",
+    write:"Dino Word Write", find:"Dino Word Find", build:"Dino Word Build",
     one:"dino", many:"dinos", place:"jungle",
     themeColor:"#D9E8B8", art: dinoSVG
   }
@@ -551,6 +660,306 @@ function mountPicker(el, opts){
   return {refresh: paint};
 }
 
+/* ---------- word picker ---------- */
+// This week's spelling words, edited in one place. Same two homes
+// as the glyph picker -- open on the hub, collapsed on each
+// spelling game's title screen -- and both write the same stored
+// list, so they cannot drift apart.
+function mountWordPicker(el, opts){
+  opts = opts || {};
+  const collapsible = !!opts.collapsible;
+
+  el.classList.add("wordpick");
+  if(collapsible) el.classList.add("collapsible");
+  el.innerHTML =
+    `<button class="picksum" type="button" aria-expanded="${collapsible ? "false" : "true"}">
+       <span class="list"></span>${collapsible ? '<span class="chev"></span>' : ""}
+     </button>
+     <div class="pickbody">
+       <div class="wordchips"></div>
+       <form class="wordadd">
+         <input type="text" placeholder="new word" autocomplete="off"
+                autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="12">
+         <button type="submit">Add</button>
+       </form>
+       <div class="presets"><button type="button" data-reset="1">Back to the starting five</button></div>
+     </div>`;
+
+  const sum   = el.querySelector(".picksum");
+  const list  = el.querySelector(".picksum .list");
+  const chips = el.querySelector(".wordchips");
+  const form  = el.querySelector(".wordadd");
+  const input = form.querySelector("input");
+
+  function paint(){
+    const on = words();
+    list.textContent = on.length <= 6 ? on.join("  ")
+                                      : on.slice(0,5).join("  ") + "  +" + (on.length - 5);
+    chips.innerHTML = on.map(w =>
+      `<button class="wordchip" type="button" data-w="${w}">
+         <span>${w}</span><i aria-hidden="true">&times;</i>
+       </button>`).join("");
+  }
+  function commit(next){
+    if(!setWords(next)) return;
+    paint();
+    if(opts.onChange) opts.onChange(words());
+  }
+
+  chips.addEventListener("click", e => {
+    const b = e.target.closest("[data-w]");
+    if(b) commit(words().filter(w => w !== b.dataset.w));
+  });
+
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    const w = cleanWord(input.value);
+    input.value = "";
+    input.blur();
+    // Silently dropped rather than warned about: anything that
+    // cleans away to nothing was never a word, and a word already
+    // on the list is already what she asked for.
+    if(w && !words().includes(w)) commit(words().concat([w]));
+  });
+
+  el.addEventListener("click", e => {
+    if(e.target.closest("[data-reset]")){ commit(DEFAULT_WORDS.slice()); return; }
+    if(collapsible && e.target.closest(".picksum"))
+      sum.setAttribute("aria-expanded", sum.getAttribute("aria-expanded") === "true" ? "false" : "true");
+  });
+
+  paint();
+  return {refresh: paint};
+}
+
+/* ---------- tracer ---------- */
+// The finger-tracing pad, lifted out of the tracing game so the
+// spelling game can write words with the same rules. It owns the
+// pad's contents and its pointer handling; the game owns the
+// sounds, the words, and what happens when a letter is finished.
+
+// How forgiving the tracing is, in the letter's own 100-unit box.
+// TOL is how close to the line she must be to make progress. BREAK
+// is how far from the letter entirely she must get before the
+// stroke lets go. WINDOW is measured in units of the letter, not
+// in samples, so a fast confident stroke isn't punished on a long
+// letter -- and JUMP, the furthest a real finger travels between
+// two events, is what actually caps skipping ahead.
+const SAMPLES = 90, TOL = 9, BREAK = 20, WINDOW = 30, JUMP = 25;
+
+function mountTracer(pad, opts){
+  opts = opts || {};
+  let strokes = [], strokeIdx = 0;
+  let samples = [], strokeLen = 0, winSamples = 12;
+  let progress = 0, tracing = false, lastPt = null;
+  let inkEls = [], lens = [], hinted = false;
+
+  const $$ = s => pad.querySelector(s);
+  const dist = (a,b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  // Walk a path with getPointAtLength so we have real coordinates
+  // to hit-test against, and so progress can be measured in arc
+  // length rather than guessed from the pointer.
+  function samplePath(d){
+    const p = document.createElementNS("http://www.w3.org/2000/svg","path");
+    p.setAttribute("d", d);
+    pad.appendChild(p);
+    const len = p.getTotalLength();
+    const pts = [];
+    for(let i=0;i<SAMPLES;i++){
+      const pt = p.getPointAtLength(len * i / (SAMPLES-1));
+      pts.push({x:pt.x, y:pt.y});
+    }
+    pad.removeChild(p);
+    return {pts, len};
+  }
+
+  function toSvg(e){
+    const pt = pad.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    return pt.matrixTransform(pad.getScreenCTM().inverse());
+  }
+
+  function load(glyph){
+    strokes = STROKES[glyph] || [];
+    strokeIdx = 0;
+    hinted = false;
+
+    const ghosts = strokes.map((d,i)=>`<path class="ghost" data-i="${i}" d="${d}"/>`).join("");
+    const inks   = strokes.map((d,i)=>`<path class="ink" data-i="${i}" d="${d}"/>`).join("");
+
+    pad.innerHTML = `
+      <rect class="card" x="1.5" y="1.5" width="97" height="97" rx="13"/>
+      ${ruling()}
+      <g id="ghosts">${ghosts}</g>
+      <g id="inks">${inks}</g>
+      <circle class="demodot" id="demodot" r="5" cx="-50" cy="-50" opacity="0"/>
+      <circle class="startdot" id="startdot" r="5.4" cx="-50" cy="-50"/>`;
+
+    inkEls = [...pad.querySelectorAll(".ink")];
+    lens   = inkEls.map(el => el.getTotalLength());
+
+    // Every ink path starts hidden; each is revealed by dashoffset
+    // as she traces it, and left at full for strokes already done.
+    inkEls.forEach((el,i) => {
+      el.style.strokeDasharray  = lens[i];
+      el.style.strokeDashoffset = lens[i];
+    });
+
+    loadStroke();
+  }
+
+  function loadStroke(){
+    const s = samplePath(strokes[strokeIdx]);
+    samples = s.pts;
+    strokeLen = s.len;
+    // WINDOW is in letter units; convert to samples for this
+    // stroke, then cap it. Short strokes are shorter than WINDOW,
+    // and without the cap the window would span the whole path --
+    // one touch near the far end would finish the letter without
+    // drawing it.
+    const step = strokeLen / (SAMPLES - 1) || 1;
+    winSamples = Math.max(4, Math.min(Math.ceil(WINDOW / step), Math.floor(SAMPLES * 0.16)));
+    progress = 0;
+    lastPt = null;
+    const dot = $$("#startdot");
+    dot.setAttribute("cx", samples[0].x);
+    dot.setAttribute("cy", samples[0].y);
+    dot.style.display = "";
+    paint();
+    steps();
+  }
+
+  function paint(){
+    const el = inkEls[strokeIdx];
+    if(!el) return;
+    el.style.strokeDashoffset = lens[strokeIdx] * (1 - progress / (SAMPLES-1));
+  }
+
+  function steps(){
+    if(!opts.steps) return;
+    opts.steps.innerHTML = strokes.map((_,i) =>
+      `<i class="${i < strokeIdx ? "on" : i === strokeIdx ? "now" : ""}"></i>`).join("");
+  }
+
+  // A stroke is one continuous movement of the pen. That's not a
+  // rule invented for the game -- it's what a stroke is -- and
+  // enforcing it is also what stops the letter being filled in by
+  // poking at it, since progress can never be accumulated across
+  // separate touches.
+  pad.addEventListener("pointerdown", e => {
+    if(!samples.length) return;
+    const p = toSvg(e);
+    if(dist(p, samples[0]) > TOL * 1.4) return;
+
+    // The dots on i and j are a couple of units long -- there's
+    // nothing to drag along, so a tap in the right place finishes
+    // them. Without this they stall, since only movement advances.
+    if(strokeLen < 8){ completeStroke(); return; }
+
+    progress = 0;
+    paint();
+    tracing = true;
+    lastPt = p;
+    // Capture keeps the stroke alive if her finger slides off the
+    // pad. Not every pointer can be captured, and failing to is not
+    // a reason to drop the stroke.
+    try{ pad.setPointerCapture(e.pointerId); }catch(err){}
+    $$("#startdot").style.display = "none";
+  });
+
+  pad.addEventListener("pointermove", e => {
+    if(!tracing) return;
+    e.preventDefault();
+    const p = toSvg(e);
+
+    // A finger drags, it doesn't teleport. Anything landing far
+    // from the last point isn't part of one continuous stroke.
+    if(lastPt && dist(p, lastPt) > JUMP){ resetStroke(); return; }
+    lastPt = p;
+
+    // Off the letter entirely? That's a break. Measured against the
+    // whole stroke, not just the bit she's expected to be on, so
+    // moving faster than expected reads as fast rather than as lost.
+    let nearest = Infinity;
+    for(let i = 0; i < SAMPLES; i++){
+      const dd = dist(p, samples[i]);
+      if(dd < nearest) nearest = dd;
+    }
+    if(nearest > BREAK){ resetStroke(); return; }
+
+    // Advance to the furthest point she's actually reached, capped
+    // to a window ahead so she can't jump the queue.
+    const cap = Math.min(progress + winSamples, SAMPLES - 1);
+    let best = progress;
+    for(let i = progress + 1; i <= cap; i++){
+      if(dist(p, samples[i]) <= TOL) best = i;
+    }
+    if(best > progress){ progress = best; paint(); }
+
+    if(progress >= SAMPLES - 3) completeStroke();
+  }, {passive:false});
+
+  // Lifting off or wandering away puts the stroke back to the
+  // start. Strokes are a second or two long, so this costs her
+  // very little, and the ink wiping back is clearer feedback than
+  // a silent stall.
+  function resetStroke(){
+    tracing = false; lastPt = null;
+    if(!samples.length) return;
+    progress = 0;
+    paint();
+    const dot = $$("#startdot");
+    if(!dot) return;
+    dot.setAttribute("cx", samples[0].x);
+    dot.setAttribute("cy", samples[0].y);
+    dot.style.display = "";
+  }
+  pad.addEventListener("pointerup", resetStroke);
+  pad.addEventListener("pointercancel", resetStroke);
+  pad.addEventListener("pointerleave", resetStroke);
+
+  function completeStroke(){
+    tracing = false;
+    progress = SAMPLES - 1;
+    paint();
+    $$("#startdot").style.display = "none";
+    samples = [];
+
+    if(strokeIdx < strokes.length - 1){
+      strokeIdx++;
+      steps();
+      setTimeout(loadStroke, 220);
+      if(opts.onStroke) opts.onStroke(strokeIdx, strokes.length);
+    } else {
+      steps();
+      if(opts.onLetter) opts.onLetter(hinted);
+    }
+  }
+
+  // Runs a dot along the current stroke at writing speed. It draws
+  // the ink as it goes, then wipes it, so she sees the direction
+  // without getting the stroke for free.
+  function showMe(){
+    if(!samples.length || tracing) return;
+    hinted = true;
+    const dot = $$("#demodot"), el = inkEls[strokeIdx], L = lens[strokeIdx];
+    dot.style.opacity = 1;
+    const t0 = performance.now(), dur = 1500;
+    (function step(now){
+      const k = Math.min(1, (now - t0) / dur);
+      const i = Math.round(k * (SAMPLES-1));
+      dot.setAttribute("cx", samples[i].x);
+      dot.setAttribute("cy", samples[i].y);
+      el.style.strokeDashoffset = L * (1 - k);
+      if(k < 1) requestAnimationFrame(step);
+      else setTimeout(() => { dot.style.opacity = 0; paint(); }, 320);
+    })(t0);
+  }
+
+  return {load, showMe, hinted: () => hinted};
+}
+
 /* ---------- skin switch ---------- */
 function mountSkinSwitch(el, onChange){
   el.classList.add("skinset");
@@ -591,11 +1000,13 @@ function showScreen(id){
 return { DEFAULT_FOCUS, ALL_LETTERS, DIGITS, ALL_GLYPHS,
          NAMES, KEYWORD, CONFUSE_LOWER, CONFUSE_UPPER, COATS, SCALES, STROKES, DRAWN,
          traceable, isDigit, hasSound, focus, setFocus,
+         DEFAULT_WORDS, FILLER_WORDS, cleanWord, words, setWords, lookalikes,
          base, isBig, cased, shuffle, store,
          tone, ding, blip, buzz, cheer, unlockAudio,
          loadVoices, wireVoicePicker, setTalkIndicator, speak, named, starts,
-         ruling, tileSVG, ponySVG, dinoSVG, critterSVG, fillMeadow,
+         ruling, tileSVG, wordSVG, wordWidth, ponySVG, dinoSVG, critterSVG, fillMeadow,
          SKINS, skin, setSkin, applySkin, mountPicker, mountSkinSwitch, focusSummary,
+         mountWordPicker, mountTracer,
          noDoubleTapZoom, showScreen };
 })();
 

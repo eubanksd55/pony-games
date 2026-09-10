@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Word Write">
+<meta name="theme-color" content="#F7D5E4">
+<title data-word="write">Pony Word Write</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  #title{align-items:center;justify-content:center;gap:16px;text-align:center;overflow-y:auto}
+  #hero{width:min(170px,40vw)}
+
+  /* The word she is writing sits above the pad the whole time,
+     with the letter she is on marked. Without it a five-letter
+     word is five unrelated letters. */
+  #sofar{flex:0 0 auto;width:100%;max-width:520px;margin:0 auto 10px}
+
+  .stage{flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-height:0}
+  #pad{
+    height:100%;max-height:100%;aspect-ratio:1/1;max-width:100%;
+    touch-action:none;cursor:crosshair;
+    filter:drop-shadow(0 6px 0 #00000012);
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= TITLE ================= -->
+<section class="screen on" id="title">
+  <div id="hero"></div>
+  <h1 class="title"><span data-word="name">Pony</span> <em>Word Write</em></h1>
+  <p class="sub">Hear a word, then write it one letter at a time. Start on the
+     green dot and follow the shape with your finger.</p>
+
+  <div class="setting" style="width:100%;max-width:520px">
+    <label>This week's words</label>
+    <div id="picker"></div>
+  </div>
+
+  <div class="voicerow">
+    <select class="voices"></select>
+    <button class="tinybtn" id="tryVoice">Hear it</button>
+  </div>
+
+  <button class="bigbtn" id="start">Play</button>
+  <a class="tinybtn" href="index.html" style="text-decoration:none">All games</a>
+</section>
+
+<!-- ================= GAME ================= -->
+<section class="screen" id="game">
+  <div class="meadow" id="meadow"></div>
+
+  <div class="gamebar">
+    <button class="tinybtn" id="showme">Show me</button>
+    <div class="spacer"></div>
+    <button class="speaker" id="say">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
+        <path d="M17 8.5a5 5 0 010 7M20 6a9 9 0 010 12"/>
+      </svg>
+      <span id="sayText">the</span>
+    </button>
+    <div class="spacer"></div>
+    <button class="iconbtn" id="quit" aria-label="Back to start">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="wordcard" id="sofar"></div>
+
+  <div class="stage">
+    <svg id="pad" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+
+  <div class="stepdots" id="steps" style="margin-top:10px"></div>
+</section>
+
+<!-- ================= DONE ================= -->
+<section class="screen donewrap" id="done">
+  <h2 id="doneTitle"></h2>
+  <div class="bigmeadow" id="doneMeadow"></div>
+  <p class="note" id="doneNote"></p>
+  <button class="bigbtn" id="again">Write again</button>
+  <a class="tinybtn" href="index.html" style="text-decoration:none">All games</a>
+</section>
+
+<script src="shared.js"></script>
+<script>
+"use strict";
+
+const WORDS_PER_GAME = 5;
+
+const $ = s => document.querySelector(s);
+const pad = $("#pad"), meadowEl = $("#meadow"), sofarEl = $("#sofar");
+
+let queue = [], done = 0, word = "", letterIdx = 0, cleanWords = 0, hintedWord = false;
+
+// Same pad, same rules, same forgiveness as the letter tracing
+// game -- it is the same component. All this game changes is what
+// gets loaded into it and what happens when a letter is finished.
+const tracer = PG.mountTracer(pad, {
+  steps: $("#steps"),
+  onStroke: (i, total) => { PG.blip(); if(total > 1) PG.speak("Good. Next part."); },
+  onLetter: hinted => {
+    if(hinted) hintedWord = true;
+    letterIdx++;
+    drawSoFar();
+    if(letterIdx < word.length){
+      PG.blip();
+      // Naming the letter she is about to write is the whole point
+      // of spelling practice: she hears the word broken into its
+      // letters in order, in her own voice's words.
+      PG.speak("Now " + PG.NAMES[word[letterIdx]] + ".",
+        () => setTimeout(() => tracer.load(word[letterIdx]), 120));
+    } else {
+      PG.ding();
+      done++;
+      if(!hintedWord) cleanWords++;
+      PG.fillMeadow(meadowEl, WORDS_PER_GAME, done);
+      PG.speak("You spelled " + word + "!",
+        () => setTimeout(() => done >= WORDS_PER_GAME ? finish() : nextWord(), 300));
+    }
+  }
+});
+
+$("#showme").addEventListener("click", () => tracer.showMe());
+
+/* ---------- rounds ---------- */
+// Letters she has already written are shown; the rest are hidden
+// so the word fills in as she goes, and the box she is working on
+// is the one outlined.
+function drawSoFar(){
+  sofarEl.innerHTML = PG.wordSVG(word, {
+    slots: true,
+    mask: i => i >= letterIdx,
+    slotClass: i => i < letterIdx ? "filled" : i === letterIdx ? "next" : ""
+  });
+}
+
+function nextWord(){
+  word = queue[done];
+  letterIdx = 0;
+  hintedWord = false;
+  $("#sayText").textContent = word;
+  drawSoFar();
+  tracer.load(word[0]);
+  PG.speak("Let's write " + word + ". " + spellOut(word) + ". Start with " +
+           PG.NAMES[word[0]] + ".");
+}
+
+// Spelled out with commas so the voice pauses between letters
+// instead of running them together into a nonsense word.
+const spellOut = w => w.split("").map(c => PG.NAMES[c]).join(", ");
+
+// Every word in her list gets a turn before any word repeats, so a
+// three-word list is still five rounds and still even-handed.
+function buildQueue(){
+  const usable = PG.words().filter(w => w.split("").every(PG.traceable));
+  const out = [];
+  while(out.length < WORDS_PER_GAME && usable.length)
+    out.push(...PG.shuffle(usable.slice()).slice(0, WORDS_PER_GAME - out.length));
+  return out;
+}
+
+function newGame(){
+  queue = buildQueue();
+  // Nothing writable in her list. Say so rather than opening a game
+  // that cannot be played.
+  if(!queue.length){
+    PG.showScreen("title");
+    PG.speak("Add a word to write first.");
+    return;
+  }
+  done = 0; cleanWords = 0;
+  PG.fillMeadow(meadowEl, WORDS_PER_GAME, 0);
+  PG.showScreen("game");
+  nextWord();
+}
+
+function finish(){
+  PG.fillMeadow($("#doneMeadow"), WORDS_PER_GAME, WORDS_PER_GAME);
+  const perfect = cleanWords === WORDS_PER_GAME;
+  const S = PG.skin();
+  $("#doneTitle").textContent = perfect ? "All on your own!" : "The " + S.place + " is full!";
+  $("#doneNote").textContent = perfect
+    ? WORDS_PER_GAME + " words written, no peeking."
+    : cleanWords + " of " + WORDS_PER_GAME + " written without a hint.";
+  PG.showScreen("done");
+  PG.cheer();
+  PG.speak(perfect ? "Wow! You wrote every word by yourself."
+                   : "Nice writing. The " + S.place + " is full.");
+}
+
+/* ---------- settings ---------- */
+// The sample is a word she is actually practising, so the voice
+// test previews the real thing rather than a fixed line.
+const sample = () => { const w = PG.words()[0]; return "Let's write " + w + ". " + spellOut(w) + "."; };
+
+PG.setTalkIndicator($("#say"));
+PG.wireVoicePicker(() => PG.speak(sample()));
+$("#tryVoice").addEventListener("click", () => { PG.unlockAudio(); PG.speak(sample()); });
+$("#say").addEventListener("click", () => {
+  if(word) PG.speak(word + ". " + spellOut(word) + ".");
+});
+
+$("#start").addEventListener("click", () => { PG.unlockAudio(); PG.speak("Let's write some words!", newGame); });
+$("#again").addEventListener("click", newGame);
+$("#quit").addEventListener("click", () => { speechSynthesis.cancel(); PG.showScreen("title"); });
+
+PG.mountWordPicker($("#picker"), {collapsible:true});
+
+$("#hero").innerHTML = PG.critterSVG(4);
+PG.fillMeadow(meadowEl, WORDS_PER_GAME, 0);
+PG.noDoubleTapZoom();
+</script>
+</body>
+</html>

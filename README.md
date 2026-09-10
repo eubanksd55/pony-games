@@ -1,7 +1,7 @@
 # Pony Games
 
-A small collection of letter and number games, hosted on GitHub Pages:
-https://eubanksd55.github.io/pony-games/
+A small collection of letter, number and spelling games, hosted on GitHub
+Pages: https://eubanksd55.github.io/pony-games/
 
 Two skins of the same games: **Ponies** and **Dinos**. Switch on the hub.
 
@@ -9,14 +9,17 @@ Two skins of the same games: **Ponies** and **Dinos**. Switch on the hub.
 
 All files live at the repo root; there is no build step and no dependencies.
 
-| File           | Purpose                                       |
-| -------------- | --------------------------------------------- |
-| `index.html`   | Hub: game list, skin switch, glyph picker     |
-| `letters.html` | Game 1 - hear it, find it on the board        |
-| `trace.html`   | Game 2 - write it with a finger               |
-| `shared.css`   | Shared styles and both skin palettes          |
-| `shared.js`    | Shared runtime, defines the global `PG`       |
-| `proof.html`   | Bench tool, not linked from the games         |
+| File               | Purpose                                              |
+| ------------------ | ---------------------------------------------------- |
+| `index.html`       | Hub: game list, skin switch, glyph and word pickers  |
+| `letters.html`     | Letters - hear it, find it on the board              |
+| `trace.html`       | Letters - write it with a finger                     |
+| `spell-write.html` | Spelling - hear a word, write it letter by letter    |
+| `spell-find.html`  | Spelling - hear a word, pick it out of a lineup      |
+| `spell-build.html` | Spelling - put the jumbled letters back in order     |
+| `shared.css`       | Shared styles and both skin palettes                 |
+| `shared.js`        | Shared runtime, defines the global `PG`              |
+| `proof.html`       | Bench tool, not linked from the games                |
 
 ## Adding a new game
 
@@ -35,17 +38,31 @@ game renders unstyled and non-functional, so keep the paths relative and flat.
 
 ## What she practises
 
-The glyph picker covers `a-z` and `0-9`. The chosen set is stored per device
-under `focus` and is shared by both games; a device that has never set one
-starts on the "tricky nine" (`b d p q g j i y w`), not on the whole alphabet.
+Two stored sets, both edited on the hub and again on each game's title screen,
+and both shared by every game that uses them.
 
-Two rules worth knowing before changing the games:
+**Letters** - the glyph picker covers `a-z` and `0-9`. Stored per device under
+`focus`; a device that has never set one starts on the "tricky nine"
+(`b d p q g j i y w`), not on the whole alphabet.
+
+**Words** - this week's spelling list, stored per device under `words`, and
+edited by typing them in rather than by changing code. A device that has never
+set one starts on `zero one two three the`. Words are plain lowercase `a-z`;
+anything else is stripped on the way in, because the glyph geometry has no
+apostrophe and the tracing game could not draw one.
+
+Three rules worth knowing before changing the games:
 
 - **Distractor tiles are drawn from the whole alphabet, not just her set.**
   The board grows to nine tiles and a focus set may be much smaller than
   that. A board that cannot fill is a board she can finish by elimination.
 - **A numeral has a name but no initial sound.** Sounds mode skips digits and
   asks by name instead; `PG.hasSound(g)` is the check.
+- **Every card in a word lineup is the same width.** Cards sized to their own
+  words let her answer by silhouette - "the" is visibly the short one - which
+  is exactly the reading she is meant to be doing instead. `PG.wordSVG` takes
+  a `cells` option for this; `spell-find.html` passes the longest word in the
+  lineup.
 
 ## Letterforms
 
@@ -72,7 +89,19 @@ flags are very easy to get backwards and look plausible in the diff: `u` and
 Only a glyph with strokes can be traced. One without them measures zero
 length, which trips the short-stroke shortcut meant for the dots on `i` and
 `j` and hands the letter over as an instant win, so `trace.html` filters on
-`PG.traceable(g)` rather than trusting the set.
+`PG.traceable(g)` rather than trusting the set, and `spell-write.html` filters
+whole words the same way.
+
+## The tracing pad
+
+Both writing games share one pad. `PG.mountTracer(padSvg, opts)` owns the
+pad's contents and all of its pointer handling - hit-testing, ink, stroke
+order, the green start dot and the "show me" demo - and hands back
+`{load(glyph), showMe(), hinted()}`. The game around it owns the sounds, the
+queue, and what happens on `opts.onStroke` and `opts.onLetter`. The tuning
+constants (`TOL`, `BREAK`, `WINDOW`, `JUMP`) live with it in `shared.js`, so
+tracing a letter and tracing a letter inside a word are forgiving in exactly
+the same way.
 
 ## Updating
 

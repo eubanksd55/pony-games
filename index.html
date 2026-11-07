@@ -43,9 +43,8 @@
   .soon{opacity:.5}
   .soon .tag{color:var(--plum);background:var(--tag-soon)}
 
-  /* Two sections now, so each needs a name. Without one the five
-     cards read as one long list and the spelling games look like
-     more letter games. */
+  /* Each section needs a name. Without one the cards read as one
+     long list and the spelling games look like more letter games. */
   .section{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%}
   .sectionhead{
     font-family:var(--ui);font-size:12px;font-weight:800;color:var(--plum);
@@ -78,6 +77,20 @@
           <h2><span data-word="name">Pony</span> Trace</h2>
           <p>Write the letter with your finger, starting on the green dot and following the right path.</p>
           <span class="tag">Writing it</span>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sectionhead">Sounding out</div>
+    <div class="cards">
+      <a class="gamecard" href="vowels.html">
+        <div class="art" data-critter="2"></div>
+        <div>
+          <h2><span data-word="name">Pony</span> Vowels</h2>
+          <p>Hear a three-letter word, then fill in the missing middle sound.</p>
+          <span class="tag">Hearing it</span>
         </div>
       </a>
     </div>

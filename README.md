@@ -14,6 +14,7 @@ All files live at the repo root; there is no build step and no dependencies.
 | `index.html`       | Hub: game list, skin switch, glyph and word pickers  |
 | `letters.html`     | Letters - hear it, find it on the board              |
 | `trace.html`       | Letters - write it with a finger                     |
+| `vowels.html`      | Sounding out - hear a word, fill in its middle vowel |
 | `spell-write.html` | Spelling - hear a word, write it letter by letter    |
 | `spell-find.html`  | Spelling - hear a word, pick it out of a lineup      |
 | `spell-build.html` | Spelling - put the jumbled letters back in order     |
@@ -63,6 +64,24 @@ Three rules worth knowing before changing the games:
   is exactly the reading she is meant to be doing instead. `PG.wordSVG` takes
   a `cells` option for this; `spell-find.html` passes the longest word in the
   lineup.
+
+## Sounding out
+
+`vowels.html` keeps its own word bank: about 140 three-letter words with a
+short vowel in the middle, some with an emoji picture and some listen-only.
+They live in the game, not in `shared.js`, because no other game uses them
+and they are not this week's list.
+
+- **A wrong vowel is only spoken back if it makes a word on the `SAFE`
+  list.** `hat` with an `o` becomes "That says hot", which is the lesson.
+  Anything not on the list just buzzes and nothing lands in the slot, so a
+  wrong tap can never put an unwanted word on screen. Add to `SAFE`
+  deliberately.
+- **Vowel hints use `PG.KEYWORD`**, so this game and the letters game anchor
+  each sound to the same word. `e` is "elephant", not "egg": across much of
+  Texas "egg" is said "ayg".
+- **Missed words come back** three rounds later, and up to four lead off the
+  next game, stored per device under `vowelreview`.
 
 ## Letterforms
 

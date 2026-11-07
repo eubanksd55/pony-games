@@ -35,10 +35,12 @@ const NAMES = {
 // must START with the letter's sound -- swap freely, keep the rule.
 // x is the one letter English gives no word for; "x-ray" is the
 // classroom convention and is what she'll meet at school.
+// e is "elephant", not "egg": across much of Texas and the South
+// "egg" is said "ayg", which anchors the short e to the wrong vowel.
 // Digits deliberately have no entry: a numeral has a name but no
 // initial sound, so sounds mode skips them. Ask with hasSound().
 const KEYWORD = {
-  a:"apple", b:"ball",  c:"cat",      d:"dog",   e:"egg",   f:"fish",
+  a:"apple", b:"ball",  c:"cat",      d:"dog",   e:"elephant", f:"fish",
   g:"goat",  h:"hat",   i:"igloo",    j:"jam",   k:"kite",  l:"leaf",
   m:"moon",  n:"nest",  o:"octopus",  p:"pig",   q:"queen", r:"rain",
   s:"sun",   t:"tree",  u:"umbrella", v:"van",   w:"web",
@@ -389,12 +391,14 @@ function wireVoicePicker(onChange){
 }
 function setTalkIndicator(el){ talkEl = el; }
 
-function speak(text, then){
+// opts.rate slows one line down without touching the default, for
+// a game that wants a word drawn out while she listens to it.
+function speak(text, then, opts){
   if(!window.speechSynthesis){ if(then) then(); return; }
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   if(voice) u.voice = voice;
-  u.rate = 0.9; u.pitch = 1.1; u.volume = 1;
+  u.rate = (opts && opts.rate) || 0.9; u.pitch = 1.1; u.volume = 1;
   u.lang = (voice && voice.lang) || "en-US";
   if(talkEl) talkEl.classList.add("talking");
   u.onend = u.onerror = () => {
@@ -538,6 +542,7 @@ const SKINS = {
     key:"pony", label:"Ponies", name:"Pony", games:"Pony Games",
     letters:"Pony Letters", trace:"Pony Trace",
     write:"Pony Word Write", find:"Pony Word Find", build:"Pony Word Build",
+    vowels:"Pony Vowels",
     one:"pony", many:"ponies", place:"meadow",
     themeColor:"#F7D5E4", art: ponySVG
   },
@@ -545,6 +550,7 @@ const SKINS = {
     key:"dino", label:"Dinos", name:"Dino", games:"Dino Games",
     letters:"Dino Letters", trace:"Dino Trace",
     write:"Dino Word Write", find:"Dino Word Find", build:"Dino Word Build",
+    vowels:"Dino Vowels",
     one:"dino", many:"dinos", place:"jungle",
     themeColor:"#D9E8B8", art: dinoSVG
   }

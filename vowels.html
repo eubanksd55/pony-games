@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Vowels">
+<meta name="theme-color" content="#F7D5E4">
+<title data-word="vowels">Pony Vowels</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  #title{align-items:center;justify-content:center;gap:16px;text-align:center;overflow-y:auto}
+  #hero{width:min(170px,40vw)}
+
+  #vowelPills{border-radius:20px}
+  #vowelPills button{padding:3px;border-radius:14px;opacity:.35;transition:opacity .15s ease}
+  #vowelPills button[aria-pressed="true"]{opacity:1;background:var(--plum)}
+  #vowelPills svg{width:50px;height:50px;display:block}
+
+  .gamebar .ghost{width:50px;flex:0 0 auto}
+
+  /* Picture beside the word on a wide screen, above it on a tall one. */
+  .stage{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;gap:clamp(16px,4vmin,44px)}
+  @media (max-aspect-ratio:1/1){.stage{flex-direction:column}}
+
+  .pic{
+    flex:0 0 auto;width:clamp(120px,30vmin,260px);aspect-ratio:1;border:none;border-radius:26px;
+    background:var(--paper);box-shadow:0 6px 0 #00000014;display:grid;place-items:center;cursor:pointer;
+  }
+  .pic .em{font-size:clamp(72px,18vmin,160px);line-height:1}
+  .pic .ear{width:50%;height:50%;color:var(--rule-base)}
+  .pic.fresh{animation:land .32s ease}
+  .pic:active{transform:scale(.97)}
+
+  .wordbox{flex:0 0 auto;width:clamp(260px,56vmin,540px)}
+  @media (max-aspect-ratio:1/1){.wordbox{width:min(84vw,540px)}}
+  .wordbox svg{width:100%;height:auto;display:block;filter:drop-shadow(0 6px 0 #00000014)}
+
+  /* Letters in the word. The outer group places a letter, the inner
+     .L group is what animates, so a CSS transform never fights the
+     placement transform. */
+  .L{transform-box:fill-box;transform-origin:50% 100%;transition:transform .2s ease}
+  .L.mid .drawn{stroke:var(--plum)}
+  .L.bad .drawn{stroke:#E0803A}
+  .L.lit{transform:scale(1.12)}
+  .L.lit .drawn{stroke:var(--rule-base)}
+  .L.fresh{animation:pop .42s ease}
+  #dotg{opacity:0;transition:transform .3s ease-in-out,opacity .2s ease}
+  #dotg.on{opacity:1}
+  #dotg circle{fill:var(--rule-base)}
+
+  #shelf{flex:0 0 auto;min-height:64px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
+  .wchip{
+    display:flex;align-items:center;gap:6px;border:none;border-radius:16px;
+    padding:4px 10px 4px 8px;background:#FFFFFFB0;cursor:pointer;animation:land .32s ease;
+  }
+  .wchip .em{font-size:34px;line-height:1}
+  .wchip svg{height:54px;width:auto;display:block}
+
+  .vowels{flex:0 0 auto;display:flex;justify-content:center;gap:clamp(8px,2vw,20px);padding:4px 0 2px}
+  .vbtn{
+    border:none;background:transparent;padding:0;width:clamp(78px,16.5vmin,140px);cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:4px;transition:opacity .2s ease;
+  }
+  .vbtn > svg{width:100%;height:auto;display:block;filter:drop-shadow(0 5px 0 #00000014);transition:transform .12s ease}
+  .vbtn:active > svg{transform:scale(.95)}
+  .vbtn .helper{height:clamp(30px,5.5vmin,46px);display:flex;align-items:center;justify-content:center;font-size:clamp(26px,5vmin,42px);line-height:1}
+  .vbtn .helper svg{height:100%;width:auto}
+  .vowels:not(.helpers) .helper{display:none}
+  .vbtn.right .card{fill:var(--yes)}
+  .vbtn.right > svg{animation:pop .42s ease}
+  .vbtn.wrong .card{fill:var(--no)}
+  .vbtn.wrong{animation:shake .4s ease}
+  .vbtn.nope{opacity:.3;pointer-events:none}
+  .vbtn.glow > svg{animation:glow .8s ease-in-out infinite alternate}
+  @keyframes glow{to{transform:translateY(-6px);filter:drop-shadow(0 0 14px var(--rule-base)) drop-shadow(0 5px 0 #00000014)}}
+</style>
+</head>
+<body>
+
+<!-- ================= TITLE ================= -->
+<section class="screen on" id="title">
+  <div id="hero" data-critter="2"></div>
+  <h1 class="title"><span data-word="name">Pony</span> <em>Vowels</em></h1>
+
+  <div class="setting">
+    <label>Vowels</label>
+    <div class="pillset" id="vowelPills" role="group"></div>
+  </div>
+
+  <div class="setting">
+    <label>Vowel pictures</label>
+    <div class="pillset" role="group">
+      <button id="hOn" aria-pressed="true">On</button>
+      <button id="hOff" aria-pressed="false">Off</button>
+    </div>
+  </div>
+
+  <div class="voicerow">
+    <select class="voices"></select>
+    <button class="tinybtn" id="tryVoice">Hear it</button>
+  </div>
+
+  <button class="bigbtn" id="start">Play</button>
+  <a class="tinybtn" href="index.html" style="text-decoration:none">All games</a>
+</section>
+
+<!-- ================= GAME ================= -->
+<section class="screen" id="game">
+  <div class="meadow" id="meadow"></div>
+
+  <div class="gamebar">
+    <div class="ghost"></div>
+    <div class="spacer"></div>
+    <button class="speaker" id="say">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
+        <path d="M17 8.5a5 5 0 010 7M20 6a9 9 0 010 12"/>
+      </svg>
+      <span>Hear it again</span>
+    </button>
+    <div class="spacer"></div>
+    <button class="iconbtn" id="quit" aria-label="Back to start">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="stage">
+    <button class="pic" id="pic" aria-label="Hear the word"></button>
+    <div class="wordbox" id="word"></div>
+  </div>
+
+  <div id="shelf"></div>
+  <div class="vowels" id="vowels"></div>
+</section>
+
+<!-- ================= DONE ================= -->
+<section class="screen donewrap" id="done">
+  <h2 id="doneTitle"></h2>
+  <div class="bigmeadow" id="doneMeadow"></div>
+  <p class="note" id="doneNote"></p>
+  <div class="chiprow" id="missed"></div>
+  <button class="bigbtn" id="again">Play again</button>
+  <a class="tinybtn" href="index.html" style="text-decoration:none">All games</a>
+</section>
+
+<script src="shared.js"></script>
+<script>
+"use strict";
+
+const ROUNDS = 12;
+const ORDER  = ["a","e","i","o","u"];
+const SLOW = 0.72, STRETCH = 0.5;
+const PRAISE = ["Yes!", "You got it!", "Nice listening!", "That's it!", "Super!", "Great job!"];
+
+const $ = s => document.querySelector(s);
+const meadowEl = $("#meadow"), picEl = $("#pic"), wordEl = $("#word"),
+      shelfEl = $("#shelf"), vowelsEl = $("#vowels");
+
+/* ---------- words ---------- */
+// Every word is consonant-vowel-consonant with a short vowel. No
+// r-controlled vowels, no w or y endings, nothing spelled against its
+// sound (son, put, was). The middle letter is always the vowel.
+
+// Picture words: an emoji she can name on sight.
+const PICS = {
+  cat:"🐱", bat:"🦇", rat:"🐀", hat:"🎩", cap:"🧢", map:"🗺️", bag:"👜",
+  van:"🚐", can:"🥫", ram:"🐏", sad:"😢", mad:"😠", gas:"⛽",
+  bed:"🛏️", hen:"🐔", pen:"🖊️", net:"🥅", jet:"✈️", web:"🕸️", ten:"🔟",
+  red:"🔴", gem:"💎", leg:"🦵",
+  pig:"🐷", pin:"📌", six:"6️⃣", kid:"🧒", lip:"👄", win:"🏆",
+  dog:"🐶", fox:"🦊", box:"📦", log:"🪵", pot:"🍲", hot:"🥵", fog:"🌫️",
+  bus:"🚌", sun:"☀️", cup:"🥤", bug:"🐛", nut:"🥜", hut:"🛖", mug:"☕",
+  tub:"🛁", hug:"🫂", run:"🏃", sub:"🥪", yum:"😋", cut:"✂️"
+};
+
+// Listen-only words: no picture, so she has to go by ear.
+const LISTEN = {
+  a: "dad man pan fan ran jam ham nap tap lap sat mat pat wag tag bad had pad cab gap wax zap tan yam",
+  e: "pet wet get let set met yes men den beg peg fed vet yet",
+  i: "big dig fig wig bin fin tin kit sit hit bit fit hid lid did bib rib dip hip rip sip tip zip him mix fix",
+  o: "mom top hop mop pop cot dot got lot not jog nod rod job hog pod",
+  u: "pup cub rub gum hum bun fun rug jug dug tug mud bud"
+};
+
+const WORDS = [...new Set([...Object.keys(PICS), ...Object.values(LISTEN).join(" ").split(" ")])];
+
+// Real, kid-safe words a wrong vowel can make (hat -> hot). Only these
+// are ever shown or spoken back. Anything else gets the buzz and
+// nothing lands in the slot, so a wrong tap can never put an unwanted
+// word on screen or in the voice's mouth.
+const SAFE = new Set([...WORDS, ...(
+  "bid bet bot but pun tab sob hem lag pep pit rag rig rim sum tot wit " +
+  "bog cop dab fib hub jig lad led lit mid nip pug rot sap sax"
+).split(" ")]);
+
+// Pictures for each vowel's keyword. The keywords themselves come from
+// PG.KEYWORD, so this game and the letters game anchor a sound to the
+// same word.
+const IGLOO = `<svg viewBox="0 0 40 32" aria-hidden="true">
+  <path d="M4 28 A16 16 0 0 1 36 28 Z" fill="#EAF4FF" stroke="#8FB2DD" stroke-width="1.6"/>
+  <path d="M6 22 H34 M10 16 H30 M10 28 V22 M30 28 V22 M15 22 V16 M25 22 V16 M20 16 V12" stroke="#B7CDEB" stroke-width="1.3" fill="none"/>
+  <path d="M15 28 V23 A5 5 0 0 1 25 23 V28 Z" fill="#6E8FBF"/>
+</svg>`;
+const KEYPIC = { apple:"🍎", elephant:"🐘", egg:"🥚", igloo:IGLOO, octopus:"🐙", umbrella:"☂️" };
+const keyword = v => PG.KEYWORD[v];
+
+/* ---------- storage ---------- */
+const load = (k, d) => { const v = PG.store.get(k); return v === null || v === undefined ? d : v; };
+const listOf = s => String(s || "").split(",").filter(Boolean);
+
+let vowelsOn = listOf(load("vowelset", ORDER.join(","))).filter(v => ORDER.includes(v));
+if(vowelsOn.length < 2) vowelsOn = ORDER.slice();
+let helpers = load("vowelpics", "on") !== "off";
+
+/* ---------- speech ---------- */
+// PG.speak with a promise around it, and a ceiling on the wait: if a
+// voice never reports that it finished, the round still moves on.
+function say(text, rate){
+  return new Promise(res => {
+    let done = false, t = 0;
+    const fin = () => { if(done) return; done = true; clearTimeout(t); res(); };
+    t = setTimeout(fin, Math.min(8000, (900 + text.length * 90) / (rate || 0.9)));
+    PG.speak(text, fin, rate ? { rate } : undefined);
+  });
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const pick = a => a[(Math.random() * a.length) | 0];
+
+/* ---------- drawing ---------- */
+// The word on one card, drawn from the same strokes and on the same
+// ruling and pitch as PG.wordSVG, so it matches every other word in
+// the games. Built here rather than with PG.wordSVG because each letter
+// needs its own handle: the middle one changes state, and all three
+// light up in turn when she gets it.
+const PITCH = 46, PAD = 14, W = PAD * 2 + 3 * PITCH;
+const cx = i => PAD + i * PITCH + 23;
+
+function strip(word, opt){
+  opt = opt || {};
+  const mid = "mid" in opt ? opt.mid : word[1];
+  const letters = [word[0], mid, word[2]];
+  const body = letters.map((g, i) => {
+    if(i === 1 && !g)
+      return `<rect class="slot next" x="${PAD + PITCH + 3}" y="24" width="40" height="64" rx="9"/>`;
+    const paths = (PG.DRAWN[g] || []).map(d => `<path class="drawn" d="${d}"/>`).join("");
+    const cls = i === 1 ? (opt.midCls || "") : "";
+    return `<g transform="translate(${PAD + i * PITCH - 27},0)"><g class="L ${cls}">${paths}</g></g>`;
+  }).join("");
+  const dot = opt.dot
+    ? `<g id="dotg" style="transform:translateX(${cx(0)}px)"><circle cx="0" cy="98" r="4.6"/></g>` : "";
+  return `<svg viewBox="0 16 ${W} 90" preserveAspectRatio="xMidYMid meet" aria-label="${word}">
+    <rect class="card" x="1.5" y="17.5" width="${W - 3}" height="87" rx="13"/>
+    <line class="midline"  x1="8" y1="46" x2="${W - 8}" y2="46"/>
+    <line class="baseline" x1="8" y1="72" x2="${W - 8}" y2="72"/>
+    ${body}${dot}
+  </svg>`;
+}
+
+const SPEAKER = `<svg class="ear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M17 8.5a5 5 0 010 7M20 6a9 9 0 010 12"/></svg>`;
+
+const chip = w =>
+  `<button class="wchip" data-w="${w}">${PICS[w] ? `<span class="em">${PICS[w]}</span>` : ""}${strip(w, { midCls:"mid" })}</button>`;
+
+/* ---------- title settings ---------- */
+function paintVowelPills(){
+  $("#vowelPills").innerHTML = ORDER.map(v =>
+    `<button data-v="${v}" aria-pressed="${vowelsOn.includes(v)}" aria-label="${v}">${PG.tileSVG(v)}</button>`).join("");
+}
+// Two is the floor. One vowel is not a choice, it is a tap.
+$("#vowelPills").addEventListener("click", e => {
+  const b = e.target.closest("button"); if(!b) return;
+  const v = b.dataset.v;
+  if(vowelsOn.includes(v)){
+    if(vowelsOn.length <= 2){ PG.unlockAudio(); PG.buzz(); return; }
+    vowelsOn = vowelsOn.filter(x => x !== v);
+  } else {
+    vowelsOn = ORDER.filter(x => x === v || vowelsOn.includes(x));
+  }
+  PG.store.set("vowelset", vowelsOn.join(","));
+  paintVowelPills();
+});
+
+function setHelpers(on){
+  helpers = on;
+  $("#hOn").setAttribute("aria-pressed", String(on));
+  $("#hOff").setAttribute("aria-pressed", String(!on));
+  vowelsEl.classList.toggle("helpers", on);
+  PG.store.set("vowelpics", on ? "on" : "off");
+}
+$("#hOn").addEventListener("click", () => setHelpers(true));
+$("#hOff").addEventListener("click", () => setHelpers(false));
+
+/* ---------- game state ---------- */
+let queue = [], round = 0, cur = "", wrongs = 0, locked = false;
+let earned = 0, clean = 0;
+let missed = new Set(), gotClean = new Set(), requeued = new Set();
+let gameTok = 0, tapSeq = 0;
+
+// Twelve words, spread evenly across the vowels she has on. Words she
+// missed last game come back first. Never the same vowel three times
+// running, or the third one is answered by momentum.
+function buildQueue(){
+  const pool = WORDS.filter(w => vowelsOn.includes(w[1]));
+  const review = PG.shuffle(listOf(load("vowelreview", "")).filter(w => pool.includes(w))).slice(0, 4);
+  const used = new Set(review), out = review.slice();
+  const count = {};
+  vowelsOn.forEach(v => count[v] = out.filter(w => w[1] === v).length);
+  while(out.length < ROUNDS){
+    const low = Math.min(...vowelsOn.map(v => count[v]));
+    const v = pick(vowelsOn.filter(x => count[x] === low));
+    let cands = pool.filter(w => w[1] === v && !used.has(w));
+    if(!cands.length) cands = pool.filter(w => w[1] === v);
+    const pics = cands.filter(w => PICS[w]);
+    const w = pics.length && Math.random() < 0.6 ? pick(pics) : pick(cands);
+    out.push(w); used.add(w); count[v]++;
+  }
+  const triples = a => a.reduce((n, w, i) => n + (i > 1 && w[1] === a[i-1][1] && w[1] === a[i-2][1] ? 1 : 0), 0);
+  let best = PG.shuffle(out.slice());
+  for(let t = 0; t < 80 && triples(best) > 0; t++){
+    const next = PG.shuffle(out.slice());
+    if(triples(next) < triples(best)) best = next;
+  }
+  return best;
+}
+
+function paintPic(){
+  picEl.innerHTML = PICS[cur] ? `<span class="em">${PICS[cur]}</span>` : SPEAKER;
+  picEl.classList.remove("fresh"); void picEl.offsetWidth; picEl.classList.add("fresh");
+}
+function paintWord(mid, midCls){ wordEl.innerHTML = strip(cur, { mid: mid || null, midCls, dot:true }); }
+function paintVowels(){
+  vowelsEl.innerHTML = vowelsOn.map(v =>
+    `<button class="vbtn" data-v="${v}" aria-label="${v}">${PG.tileSVG(v)}<span class="helper">${KEYPIC[keyword(v)] || ""}</span></button>`).join("");
+}
+function addChip(w){
+  if(!shelfEl.querySelector(`[data-w="${w}"]`)) shelfEl.insertAdjacentHTML("beforeend", chip(w));
+}
+
+/* ---------- rounds ---------- */
+function newGame(){
+  if(window.speechSynthesis) speechSynthesis.cancel();
+  gameTok++;
+  queue = buildQueue();
+  round = 0; earned = 0; clean = 0;
+  missed = new Set(); gotClean = new Set(); requeued = new Set();
+  PG.fillMeadow(meadowEl, ROUNDS, 0);
+  PG.showScreen("game");
+  startRound();
+}
+
+async function startRound(){
+  const tok = gameTok;
+  cur = queue[round]; wrongs = 0; locked = false;
+  const seq = ++tapSeq;
+  shelfEl.innerHTML = "";
+  paintPic(); paintWord(); paintVowels();
+  if(round === 0){
+    await say("Listen for the middle sound.");
+    if(tok !== gameTok || seq !== tapSeq) return;
+  }
+  await say(cur, SLOW);
+}
+
+async function onWrong(btn, v){
+  const tok = gameTok, seq = ++tapSeq;
+  wrongs++;
+  btn.classList.add("wrong", "nope");
+  PG.buzz();
+
+  // When the wrong vowel still makes a real word, show it and say it:
+  // hat -> hot. Hearing the word change is the point of the game.
+  const alt = cur[0] + v + cur[2];
+  if(SAFE.has(alt)){
+    paintWord(v, "bad fresh");
+    addChip(alt);
+    await say("That says " + alt + ".");
+    if(tok !== gameTok || seq !== tapSeq) return;
+    paintWord();
+  }
+
+  // Second miss, or one tile left: light the right one and tie the
+  // sound to its keyword. Past that she is guessing, not listening.
+  const left = vowelsEl.querySelectorAll(".vbtn:not(.nope)").length;
+  if(wrongs >= 2 || left === 1){
+    const right = vowelsEl.querySelector(`.vbtn[data-v="${cur[1]}"]`);
+    if(right) right.classList.add("glow");
+    await say(cur + " has the " + keyword(cur[1]) + " sound.");
+  } else {
+    await say("Listen. " + cur + ".", SLOW);
+  }
+}
+
+// A dot slides under each letter left to right while the voice draws
+// the word out, then the whole word lights: the finger-under-the-word
+// move she is taught for sounding out.
+function sweep(){
+  return new Promise(res => {
+    const Ls = [...wordEl.querySelectorAll(".L")];
+    const dot = wordEl.querySelector("#dotg");
+    const step = 380;
+    if(dot) dot.classList.add("on");
+    Ls.forEach((L, i) => setTimeout(() => {
+      Ls.forEach(x => x.classList.remove("lit"));
+      L.classList.add("lit");
+      if(dot) dot.style.transform = `translateX(${cx(i)}px)`;
+    }, i * step));
+    setTimeout(() => {
+      Ls.forEach(x => x.classList.add("lit"));
+      if(dot) dot.classList.remove("on");
+    }, Ls.length * step);
+    setTimeout(res, Ls.length * step + 350);
+  });
+}
+
+async function onRight(btn){
+  const tok = gameTok;
+  tapSeq++;
+  locked = true;
+  vowelsEl.querySelectorAll(".vbtn").forEach(b => b.classList.remove("glow"));
+  btn.classList.add("right");
+  paintWord(cur[1], "mid fresh");
+  PG.ding();
+  if(wrongs === 0){ clean++; gotClean.add(cur); } else missed.add(cur);
+
+  await wait(300);
+  if(tok !== gameTok) return;
+  await Promise.all([sweep(), say(cur, STRETCH)]);
+  if(tok !== gameTok) return;
+
+  earned++;
+  PG.fillMeadow(meadowEl, ROUNDS, earned);
+  await say(pick(PRAISE) + " " + cur + ".");
+  if(tok !== gameTok) return;
+  await wait(250);
+  if(tok !== gameTok) return;
+
+  // A missed word comes back three rounds later, once.
+  if(wrongs > 0 && !requeued.has(cur) && round + 3 < ROUNDS){
+    requeued.add(cur);
+    queue.splice(round + 3, 0, cur);
+    queue.length = ROUNDS;
+  }
+  round++;
+  if(round < ROUNDS) startRound(); else finish();
+}
+
+function finish(){
+  const S = PG.skin();
+  const perfect = clean === ROUNDS;
+  PG.fillMeadow($("#doneMeadow"), ROUNDS, ROUNDS);
+  $("#doneTitle").textContent = perfect ? "Every one, first try!" : "The " + S.place + " is full!";
+  $("#doneNote").textContent = "First try: " + clean + " / " + ROUNDS;
+  $("#missed").innerHTML = [...missed].slice(0, 8).map(chip).join("");
+
+  // Misses carry into the next game. An old one drops off once she
+  // gets it on the first try.
+  const old = listOf(load("vowelreview", ""));
+  const review = [...new Set([...missed, ...old.filter(w => !gotClean.has(w))])]
+    .filter(w => WORDS.includes(w)).slice(0, 12);
+  PG.store.set("vowelreview", review.join(","));
+
+  PG.showScreen("done");
+  PG.cheer();
+  say(perfect ? "Wow! Every word on the first try!" : "The " + S.place + " is full! Great listening.");
+}
+
+/* ---------- input ---------- */
+vowelsEl.addEventListener("click", e => {
+  const b = e.target.closest(".vbtn");
+  if(!b || locked || b.classList.contains("nope")) return;
+  if(b.dataset.v === cur[1]) onRight(b); else onWrong(b, b.dataset.v);
+});
+$("#say").addEventListener("click", () => { if(cur) say(cur, SLOW); });
+picEl.addEventListener("click", () => { if(cur) say(cur, SLOW); });
+document.addEventListener("click", e => {
+  const c = e.target.closest(".wchip");
+  if(c) say(c.dataset.w, SLOW);
+});
+
+const sample = "Listen for the middle sound. Cat.";
+PG.setTalkIndicator($("#say"));
+PG.wireVoicePicker(() => say(sample));
+$("#tryVoice").addEventListener("click", () => { PG.unlockAudio(); say(sample); });
+
+$("#start").addEventListener("click", () => { PG.unlockAudio(); newGame(); });
+$("#again").addEventListener("click", () => { PG.unlockAudio(); newGame(); });
+$("#quit").addEventListener("click", () => { gameTok++; tapSeq++; if(window.speechSynthesis) speechSynthesis.cancel(); PG.showScreen("title"); });
+
+paintVowelPills();
+setHelpers(helpers);
+PG.fillMeadow(meadowEl, ROUNDS, 0);
+PG.noDoubleTapZoom();
+</script>
+</body>
+</html>
